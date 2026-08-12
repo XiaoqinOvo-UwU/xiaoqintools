@@ -1,6 +1,8 @@
 #pragma once
 #include <QObject>
 #include <QString>
+#include <QHash>
+class QTimer;
 
 // AI companion card: chat with DeepSeek + long-term memory.
 // Memory: JSON file storing session times, novel-edit counts, sleep habits.
@@ -59,6 +61,11 @@ public:
 
     Q_INVOKABLE QString foregroundApp();                 // current foreground window title (lightweight)
 
+    // ---- PC activity monitor (startup/shutdown + software usage) ----
+    Q_INVOKABLE void startActivityMonitor();   // begin periodic foreground-app sampling
+    Q_INVOKABLE void stopActivityMonitor();
+    Q_INVOKABLE QString activitySummary();     // "今天大部分时间在用什么" (from short-term memory)
+
 signals:
     void chatReply(QString text);
     void thinkingReady(QString text);
@@ -82,4 +89,10 @@ private:
     QStringList m_chatBuffer;   // recent turns (user/ai pairs), bounded
     int m_userTurns = 0;        // user messages since last summary
     bool m_summarizing = false;
+
+    // activity monitor internals
+    void recordActivitySample();      // called by the timer
+    void flushActivityToMemory();     // write the accumulated usage into memory
+    QHash<QString, int> m_appMinutes; // app title -> minutes (today)
+    QTimer *m_monitorTimer = nullptr;
 };

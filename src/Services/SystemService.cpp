@@ -6,6 +6,7 @@
 #include <QStandardPaths>
 #include <QProcess>
 #include <QSettings>
+#include <QCoreApplication>
 #include <QtConcurrent>
 #include <QFutureWatcher>
 
@@ -129,4 +130,26 @@ QString SystemService::scanLargeFiles()
     for (int i = 0; i < take; i++)
         out << QString("%1 MB  %2").arg(found[i].first / 1024 / 1024).arg(found[i].second);
     return out.isEmpty() ? "未找到大于 50MB 的文件" : out.join("\n");
+}
+
+// ---- app auto-start (HKCU Run key) ----
+bool SystemService::setAutoStart(bool enabled)
+{
+    QSettings s("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                QSettings::NativeFormat);
+    QString exe = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+    if (enabled) {
+        s.setValue("XiaoQinTools", "\"" + exe + "\"");
+    } else {
+        s.remove("XiaoQinTools");
+    }
+    s.sync();
+    return s.status() == QSettings::NoError;
+}
+
+bool SystemService::isAutoStartEnabled()
+{
+    QSettings s("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                QSettings::NativeFormat);
+    return s.contains("XiaoQinTools");
 }

@@ -22,6 +22,11 @@ public:
 
     // extra tools
     Q_INVOKABLE QString scanLargeFiles();      // top large files on C:
+
+    // app auto-start (开机自启) via HKCU Run key
+    Q_INVOKABLE bool setAutoStart(bool enabled);
+    Q_INVOKABLE bool isAutoStartEnabled();
+
 signals:
     void cleanupDone(QString message);
 };

@@ -63,6 +63,7 @@ int main(int argc, char *argv[])
     auto *aiSvc = new AiService(&engine);
     engine.rootContext()->setContextProperty("aiService", aiSvc);
     aiSvc->recordSessionStart();
+    aiSvc->startActivityMonitor();
     engine.rootContext()->setContextProperty("statsService", new StatsService(&engine));
     engine.rootContext()->setContextProperty("contactService", &ContactService::instance());
 
@@ -72,5 +73,9 @@ int main(int argc, char *argv[])
         Qt::QueuedConnection);
 
     engine.load(QUrl("qrc:/qml/Main.qml"));
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, aiSvc, [aiSvc]() {
+        aiSvc->recordSessionEnd();
+        aiSvc->stopActivityMonitor();
+    });
     return app.exec();
 }

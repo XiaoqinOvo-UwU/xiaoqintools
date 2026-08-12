@@ -20,6 +20,7 @@
 #include <QtConcurrent>
 #include <QFutureWatcher>
 #include <QTimer>
+#include <QMap>
 #include <algorithm>
 
 AiService::AiService(QObject *parent)
@@ -114,6 +115,17 @@ void AiService::recordSessionStart()
             if (le.time().hour() >= 23 || le.time().hour() < 3) {
                 mem = jsonSet(mem, "sleepHabit", "凌晨" + QString::number(le.time().hour() + 1) + "点");
             }
+            // shutdown/rest detection: long gap since the last session end means
+            // the PC was off (or the user was away). Write a short-term memory note.
+            qint64 gapHours = le.secsTo(now) / 3600;
+            if (gapHours >= 4) {
+                QString note = QString("用户休息了约 %1 小时（上次会话结束于 %2，本次开机 %3）")
+                        .arg(gapHours)
+                        .arg(le.toString("MM-dd HH:mm"))
+                        .arg(now.toString("MM-dd HH:mm"));
+                appendNote(note);
+                mem = readMemory(); // appendNote rewrote the file
+            }
         }
     }
     mem = jsonSet(mem, "lastSessionStart", now.toString(Qt::ISODate));
@@ -126,6 +138,9 @@ void AiService::recordSessionEnd()
     QString mem = readMemory();
     QString end = QDateTime::currentDateTime().toString(Qt::ISODate);
     mem = jsonSet(mem, "lastSessionEnd", end);
+
+    // flush any tracked app usage into memory before exit
+    flushActivityToMemory();
 
     // accumulate usage minutes for today
     QString start = jsonGet(mem, "lastSessionStart");
@@ -140,6 +155,94 @@ void AiService::recordSessionEnd()
         }
     }
     writeMemory(mem);
+}
+
+// ---- PC activity monitor ----
+void AiService::startActivityMonitor()
+{
+    if (m_monitorTimer) return; // already running
+    m_monitorTimer = new QTimer(this);
+    m_monitorTimer->setInterval(60000); // sample every minute
+    connect(m_monitorTimer, &QTimer::timeout, this, [this]() { recordActivitySample(); });
+    m_monitorTimer->start();
+    recordActivitySample(); // immediate first sample
+}
+
+void AiService::stopActivityMonitor()
+{
+    if (m_monitorTimer) {
+        m_monitorTimer->stop();
+        m_monitorTimer->deleteLater();
+        m_monitorTimer = nullptr;
+    }
+    flushActivityToMemory();
+}
+
+void AiService::recordActivitySample()
+{
+    QString app = foregroundApp();
+    if (app.isEmpty()) return;
+    m_appMinutes[app] = m_appMinutes.value(app) + 1;
+    // persist every 10 minutes so a crash doesn't lose everything
+    if ((m_appMinutes.size() % 10) == 0 || m_appMinutes.value(app) >= 10)
+        flushActivityToMemory();
+}
+
+void AiService::flushActivityToMemory()
+{
+    if (m_appMinutes.isEmpty()) return;
+    QString mem = readMemory();
+    QJsonDocument d = QJsonDocument::fromJson(mem.toUtf8());
+    QJsonObject o = d.isObject() ? d.object() : QJsonObject();
+
+    // merge into "appUsageToday" as "title: minutes" pairs
+    QJsonObject usage = o.value("appUsageToday").toObject();
+    for (auto it = m_appMinutes.constBegin(); it != m_appMinutes.constEnd(); ++it) {
+        int existing = usage.value(it.key()).toInt();
+        usage.insert(it.key(), existing + it.value());
+    }
+    o.insert("appUsageToday", usage);
+    // keep only today's usage (reset key each day)
+    o.insert("appUsageDate", QDate::currentDate().toString("yyyy-MM-dd"));
+    writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
+    m_appMinutes.clear();
+}
+
+QString AiService::activitySummary()
+{
+    QString mem = readMemory();
+    QJsonDocument d = QJsonDocument::fromJson(mem.toUtf8());
+    QJsonObject o = d.isObject() ? d.object() : QJsonObject();
+    QJsonObject usage = o.value("appUsageToday").toObject();
+    if (usage.isEmpty()) return "（还没有检测到使用数据）";
+
+    // normalize common apps to friendly labels, then pick top 3 by minutes
+    QMap<int, QString> sorted; // minutes -> label (sorted ascending)
+    for (auto it = usage.constBegin(); it != usage.constEnd(); ++it) {
+        QString label = it.key();
+        int mins = it.value().toInt();
+        if (mins < 3) continue; // ignore < 3 min blips
+        QString lower = label.toLower();
+        if (lower.contains("edge") || lower.contains("chrome") || lower.contains("firefox"))
+            label = "浏览器";
+        else if (lower.contains("minecraft") || lower.contains("javaw") || lower.contains("java"))
+            label = "Minecraft";
+        else if (lower.contains("apex") || lower.contains("r5apex"))
+            label = "Apex 英雄";
+        else if (lower.contains("微信") || lower.contains("qq") || lower.contains("discord"))
+            label = "聊天软件";
+        else if (lower.contains("code") || lower.contains("visual studio"))
+            label = "写代码";
+        sorted.insert(mins, label);
+    }
+    if (sorted.isEmpty()) return "（今天还没怎么用电脑）";
+    QStringList top;
+    auto it = sorted.constEnd();
+    for (int i = 0; i < 3 && it != sorted.constBegin(); ++i) {
+        --it;
+        top << QString("%1（%2 分钟）").arg(it.value()).arg(it.key());
+    }
+    return "今天大部分时间在：" + top.join("、");
 }
 
 // ---- novel edit counting (scan C:\AI库\小说 for yesterday-modified .md files) ----
@@ -624,6 +727,9 @@ void AiService::sendMessage(const QString &text)
     QString fg = foregroundApp();
     if (!fg.isEmpty())
         ctx << "- app: 用户现在正在使用 " + fg;
+    QString act = activitySummary();
+    if (!act.isEmpty() && !act.startsWith("（"))
+        ctx << "- activity: " + act;
     QString contextBlock = "[Context]\n" + ctx.join("\n");
 
     // time prefix on the user message (KV-cache friendly)

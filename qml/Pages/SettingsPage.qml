@@ -189,6 +189,32 @@ Page {
                         font.pixelSize: 11
                         wrapMode: Text.Wrap
                     }
+
+                    // auto-start (开机自启) toggle
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Text {
+                            text: "开机自启"
+                            color: Theme.text
+                            font.pixelSize: 13
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: autostartSwitch.checked ? "已开启" : "已关闭"
+                            color: autostartSwitch.checked ? Theme.ok : Theme.textDim
+                            font.pixelSize: 11
+                        }
+                        Switch {
+                            id: autostartSwitch
+                            checked: sysService.isAutoStartEnabled()
+                            onToggled: {
+                                sysService.setAutoStart(checked)
+                                root.note = checked ? "已开启开机自启" : "已关闭开机自启"
+                            }
+                        }
+                    }
+
                     RowLayout {
                         spacing: 10
                         AppButton {
@@ -304,7 +330,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小钦的工具 v3.1.8 · 泉此方天下第一"
+                text: "小钦的工具 v3.2.0 · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
             }
