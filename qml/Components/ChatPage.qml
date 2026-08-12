@@ -7,37 +7,50 @@ import "../Components"
 Rectangle {
     id: chatPage
     color: Theme.bg
-    visible: false
     anchors.fill: parent
 
-    // enter: slide in from LEFT; exit: slide out to RIGHT
+    // enter: slide in from LEFT with a bouncy OutBack; exit: slide out to RIGHT
     opacity: 0
     x: -width
-    Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
-    Behavior on x { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+
+    // reset conversation when switching to another AI contact
+    function resetChat() {
+        msgModel.clear()
+        msgModel.append({ "isAi": true, "msg": "你好，我是" + aiService.aiName() + "。" })
+        lastGreetedId = aiService.aiName()
+    }
+
     onVisibleChanged: {
         if (visible) {
             x = -width
             opacity = 0
-            x = 0
-            opacity = 1
+            openAnim.restart()
             if (msgModel.count === 0)
                 msgModel.append({ "isAi": true, "msg": "你好，我是" + aiService.aiName() + "。" })
         } else {
-            // slide out to the right before hiding (handled by parent timer)
+            // reset so the next open always starts from the left
+            x = -width
+            opacity = 0
         }
     }
+    property string lastGreetedId: ""
 
-    // closing animation: slide to right then notify parent to hide
-    function closeWithAnim() {
-        opacity = 0
-        x = width
-        hideTimer.start()
+    // open animation (explicit object — no Behavior races)
+    ParallelAnimation {
+        id: openAnim
+        NumberAnimation { target: chatPage; property: "opacity"; from: 0; to: 1; duration: 180; easing.type: Easing.OutQuad }
+        NumberAnimation { target: chatPage; property: "x"; from: -chatPage.width; to: 0; duration: 340; easing.type: Easing.OutBack; easing.overshoot: 1.15 }
     }
-    Timer {
-        id: hideTimer
-        interval: 250
-        onTriggered: chatPage.closeFinished()
+
+    // closing animation: slide right, then notify parent to hide
+    function closeWithAnim() {
+        closeAnim.restart()
+    }
+    ParallelAnimation {
+        id: closeAnim
+        NumberAnimation { target: chatPage; property: "opacity"; to: 0; duration: 180; easing.type: Easing.InQuad }
+        NumberAnimation { target: chatPage; property: "x"; to: chatPage.width; duration: 300; easing.type: Easing.InCubic }
+        onFinished: chatPage.closeFinished()
     }
 
     signal backRequested()

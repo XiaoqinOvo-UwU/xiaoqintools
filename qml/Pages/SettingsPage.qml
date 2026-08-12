@@ -153,7 +153,7 @@ Page {
                     // click the AI avatar in the chat window to manage them.
                     Text {
                         Layout.fillWidth: true
-                        text: "AI 的名字、人设、头像和记忆：打开聊天后点击左上角 AI 头像即可设置（侧栏「新增联系人」可创建更多 AI）"
+                        text: "AI 的名字、人设、头像和记忆：打开聊天后点击左上角 AI 头像即可设置"
                         color: Theme.textDim
                         font.pixelSize: 11
                         wrapMode: Text.Wrap

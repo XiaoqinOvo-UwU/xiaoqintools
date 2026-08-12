@@ -192,56 +192,6 @@ ApplicationWindow {
                 }
 
                 // ================= AI CONTACTS =================
-                // round "add contact" button — distinct from the flat nav tabs below
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 52
-                    color: "transparent"
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onEntered: addContactBtn.color = Theme.hoverBg
-                        onExited: addContactBtn.color = "transparent"
-                        onClicked: addContactDialog.open()
-                    }
-                    RowLayout {
-                        id: addContactBtn
-                        anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        spacing: 10
-                        Rectangle {
-                            width: 40; height: 40
-                            radius: 20
-                            color: Qt.rgba(0.35,0.45,0.6,0.9)
-                            border.color: Qt.rgba(0.5,0.6,0.8,0.5)
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: "＋"
-                                color: "white"
-                                font.pixelSize: 20
-                                font.bold: true
-                            }
-                        }
-                        Column {
-                            Layout.fillWidth: true
-                            spacing: 1
-                            Text {
-                                text: "新增联系人"
-                                color: Theme.text
-                                font.pixelSize: 13
-                                font.bold: true
-                            }
-                            Text {
-                                text: "添加一个新的 AI"
-                                color: Theme.textDim
-                                font.pixelSize: 10
-                            }
-                        }
-                    }
-                }
-
                 // contact list
                 Repeater {
                     model: contactModel
@@ -249,21 +199,23 @@ ApplicationWindow {
                         id: contactItem
                         Layout.fillWidth: true
                         Layout.preferredHeight: 58
-                        color: cid === contactService.currentId() ? Theme.selected
-                             : cHover ? Theme.hoverBg : "transparent"
+                        // selected contact: only a thin left indicator bar (no full highlight)
+                        color: cHover ? Theme.hoverBg : "transparent"
                         property bool cHover: false
                         Behavior on color { ColorAnimation { duration: 140 } }
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onEntered: contactItem.cHover = true
-                            onExited: contactItem.cHover = false
-                            onClicked: {
-                                contactService.setCurrent(cid)
-                                root.refreshProfile()
-                                root.chatOpen = true
-                            }
+
+                        // selected indicator (small vertical bar, like nav tabs)
+                        Rectangle {
+                            width: 3; height: cid === contactService.currentId() ? 24 : 0
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            color: Theme.textDim
+                            radius: 1.5
+                            opacity: cid === contactService.currentId() ? 1 : 0
+                            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                            Behavior on opacity { NumberAnimation { duration: 180 } }
                         }
+
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 14
@@ -310,6 +262,22 @@ ApplicationWindow {
                                 font.pixelSize: 15
                             }
                         }
+                        // MouseArea last = on top, so clicks always reach it
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: contactItem.cHover = true
+                            onExited: contactItem.cHover = false
+                            onClicked: {
+                                // open the chat first, then refresh profile:
+                                // setCurrent fires contactsChanged -> refreshProfile (reentrant),
+                                // so chatOpen must come before it or the signal chain breaks.
+                                contactService.setCurrent(cid)
+                                root.chatOpen = true
+                                chatPage.resetChat()
+                                root.refreshProfile()
+                            }
+                        }
                     }
                 }
 
@@ -335,7 +303,8 @@ ApplicationWindow {
                         id: navItem
                         property bool hovered: false
                         property int myIndex: index
-                        readonly property bool active: root.currentPage === myIndex
+                        // when the chat page is open, no nav tab stays highlighted
+                        readonly property bool active: !root.chatOpen && root.currentPage === myIndex
                         Layout.fillWidth: true
                         Layout.preferredHeight: 44
                         color: active ? Theme.selected
@@ -532,78 +501,6 @@ ApplicationWindow {
                     text: "取消"
                     Layout.fillWidth: true
                     onClicked: profileDialog.close()
-                }
-            }
-        }
-    }
-
-    // ================= ADD CONTACT DIALOG =================
-    Dialog {
-        id: addContactDialog
-        width: 360
-        height: 300
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle {
-            color: Theme.surface
-            radius: 14
-            border.color: Theme.glassBorder
-            border.width: 1
-        }
-        header: Item {
-            height: 40
-            Text {
-                anchors.centerIn: parent
-                text: "新增 AI 联系人"
-                color: Theme.text
-                font.pixelSize: 16
-                font.bold: true
-            }
-        }
-        contentItem: ColumnLayout {
-            spacing: 12
-            Text { text: "AI 名字"; color: Theme.textDim; font.pixelSize: 12 }
-            TextField {
-                id: newContactName
-                Layout.fillWidth: true
-                Layout.preferredHeight: 36
-                color: Theme.text
-                placeholderText: "例如：白栀"
-                placeholderTextColor: Theme.textDim
-                background: Rectangle { color: Theme.inputBg; radius: 8 }
-            }
-            Text { text: "AI 人设（性格、说话风格）"; color: Theme.textDim; font.pixelSize: 12 }
-            TextArea {
-                id: newContactPersonality
-                Layout.fillWidth: true
-                Layout.preferredHeight: 80
-                color: Theme.text
-                placeholderText: "温柔、成熟、略带忧郁..."
-                placeholderTextColor: Theme.textDim
-                wrapMode: TextEdit.Wrap
-                background: Rectangle { color: Theme.inputBg; radius: 8 }
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-                AppButton {
-                    text: "创建"
-                    Layout.fillWidth: true
-                    onClicked: {
-                        var id = contactService.addContact(newContactName.text, newContactPersonality.text)
-                        root.refreshContacts()
-                        addContactDialog.close()
-                        newContactName.text = ""
-                        newContactPersonality.text = ""
-                        root.chatOpen = true
-                        islandToast.show("联系人已创建~")
-                    }
-                }
-                AppButton {
-                    text: "取消"
-                    Layout.fillWidth: true
-                    onClicked: addContactDialog.close()
                 }
             }
         }
