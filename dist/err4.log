@@ -1,0 +1,4 @@
+QQmlApplicationEngine failed to load component
+qrc:/qml/Main.qml:3:1: module "QtQuick.Layouts" is not installed
+qrc:/qml/Main.qml:2:1: module "QtQuick.Controls" is not installed
+qrc:/qml/Main.qml:1:1: module "QtQuick" is not installed

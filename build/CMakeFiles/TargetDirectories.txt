@@ -1,0 +1,6 @@
+C:/XiaoQinTools/build/CMakeFiles/XiaoQinTools.dir
+C:/XiaoQinTools/build/CMakeFiles/XiaoQinTools_qmlimportscan.dir
+C:/XiaoQinTools/build/CMakeFiles/edit_cache.dir
+C:/XiaoQinTools/build/CMakeFiles/rebuild_cache.dir
+C:/XiaoQinTools/build/CMakeFiles/XiaoQinTools_autogen_timestamp_deps.dir
+C:/XiaoQinTools/build/CMakeFiles/XiaoQinTools_autogen.dir

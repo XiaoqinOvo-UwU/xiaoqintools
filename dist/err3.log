@@ -1,0 +1,2 @@
+QQmlApplicationEngine failed to load component
+qrc:/qml/Main.qml:2:1: Cannot load library C:\XiaoQinTools\dist\qml\QtQuick\Controls\qtquickcontrols2plugin.dll: 找不到指定的模块。
