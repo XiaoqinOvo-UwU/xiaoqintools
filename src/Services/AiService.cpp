@@ -29,12 +29,29 @@ AiService::AiService(QObject *parent)
 
 QString AiService::memoryPath() const
 {
-    return "C:/XiaoQinData/用户工具/ai_memory.json";
+    // memory lives in %APPDATA% so it survives deleting the tool directory
+    return ConfigService::instance().configDir() + "/ai_memory.json";
 }
 
 void AiService::ensureMemory()
 {
-    QDir().mkpath("C:/XiaoQinData/用户工具");
+    QDir().mkpath(ConfigService::instance().configDir());
+
+    // migrate legacy memory files if present
+    const QStringList legacy = {
+        "C:/XiaoQinData/用户工具/ai_memory.json",
+        "C:/deepseek杂货铺/小钦工具/ai_memory.json",
+        "C:/XiaoQinData/tools-data/ai_memory.json",
+    };
+    if (!QFile::exists(memoryPath())) {
+        for (const QString &old : legacy) {
+            if (QFile::exists(old)) {
+                QFile::copy(old, memoryPath());
+                break;
+            }
+        }
+    }
+
     if (!QFile::exists(memoryPath())) {
         QFile f(memoryPath());
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -122,10 +139,10 @@ void AiService::recordSessionEnd()
     writeMemory(mem);
 }
 
-// ---- novel edit counting (scan C:\NovelLib\小说 for yesterday-modified .md files) ----
+// ---- novel edit counting (scan C:\AI库\小说 for yesterday-modified .md files) ----
 static int countNovelEditsYesterday()
 {
-    QDir dir("C:/NovelLib/小说");
+    QDir dir("C:/AI库/小说");
     if (!dir.exists()) return 0;
     QDate yesterday = QDate::currentDate().addDays(-1);
     int count = 0;
@@ -161,15 +178,15 @@ QString AiService::greeting()
 
     QStringList lines;
     if (hour >= 5 && hour < 11)
-        lines << "早上好，用户。";
+        lines << "早上好，小钦。";
     else if (hour >= 11 && hour < 14)
-        lines << "中午好，用户。";
+        lines << "中午好，小钦。";
     else if (hour >= 14 && hour < 18)
-        lines << "下午好，用户。";
+        lines << "下午好，小钦。";
     else if (hour >= 18 && hour < 23)
-        lines << "晚上好，用户。";
+        lines << "晚上好，小钦。";
     else
-        lines << "这么晚了还没睡……用户？";
+        lines << "这么晚了还没睡……小钦？";
 
     // yesterday usage minutes
     QDate yesterday = QDate::currentDate().addDays(-1);
@@ -270,8 +287,8 @@ QString AiService::foregroundApp()
     if (len <= 0) return QString();
     QString t = QString::fromWCharArray(buf, len).trimmed();
     if (t.isEmpty()) return QString();
-    // skip our own window title so the AI doesn't think it's "用户的工具"
-    if (t.contains("用户的工具")) return QString();
+    // skip our own window title so the AI doesn't think it's "小钦的工具"
+    if (t.contains("小钦的工具")) return QString();
     return t;
 #else
     return QString();
@@ -342,8 +359,9 @@ void AiService::setApiKey(const QString &v) { ConfigService::instance().setApiKe
 static QString copyAvatar(const QString &src, const QString &name)
 {
     if (src.isEmpty() || !QFile::exists(src)) return QString();
-    QDir().mkpath("C:/XiaoQinData/用户工具");
-    QString dest = "C:/XiaoQinData/用户工具/" + name;
+    QString dir = ConfigService::instance().configDir();
+    QDir().mkpath(dir);
+    QString dest = dir + "/" + name;
 
     // load, center-square crop, circular mask, save as PNG
     QImage img(src);
@@ -383,12 +401,12 @@ QString AiService::setAiAvatar(const QString &srcPath)
 }
 QString AiService::userAvatarPath()
 {
-    QString p = "C:/XiaoQinData/用户工具/user_avatar.png";
+    QString p = ConfigService::instance().configDir() + "/user_avatar.png";
     return QFile::exists(p) ? p : QString();
 }
 QString AiService::aiAvatarPath()
 {
-    QString p = "C:/XiaoQinData/用户工具/ai_avatar.png";
+    QString p = ConfigService::instance().configDir() + "/ai_avatar.png";
     return QFile::exists(p) ? p : QString();
 }
 

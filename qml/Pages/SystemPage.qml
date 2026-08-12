@@ -41,7 +41,7 @@ Page {
                 desc: "临时文件 / 缓存 / 崩溃转储"
                 Layout.fillWidth: true
                 onClicked: {
-                    appCore.showToast("小助手开始扫垃圾了...")
+                    appCore.showToast("泉此方开始扫垃圾了...")
                     sysService.cleanJunkAsync()
                 }
             }            ActionCard {

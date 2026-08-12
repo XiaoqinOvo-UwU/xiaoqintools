@@ -1,5 +1,6 @@
 #include "StatsService.h"
 #include "MoodService.h"
+#include "ConfigService.h"
 
 #include <QDir>
 #include <QFile>
@@ -12,12 +13,12 @@
 StatsService::StatsService(QObject *parent)
     : QObject(parent)
 {
-    QDir().mkpath("C:/XiaoQinData/tools-data");
+    QDir().mkpath(ConfigService::instance().configDir());
 }
 
 QString StatsService::statsPath() const
 {
-    return "C:/XiaoQinData/tools-data/stats.txt";
+    return ConfigService::instance().configDir() + "/stats.txt";
 }
 
 void StatsService::record(const QString &type, const QString &detail)

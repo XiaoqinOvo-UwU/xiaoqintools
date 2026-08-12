@@ -57,7 +57,7 @@ Page {
             ActionCard {
                 Layout.fillWidth: true
                 title: "今日宜忌"
-                desc: "小助手钦定"
+                desc: "泉此方钦定"
                 onClicked: {
                     var yi = ["出行","会友","交易","祈福","求财","学习","运动","表白","搬家","装修"]
                     var ji = ["熬夜","借贷","争吵","远行","动土","发誓","冒险","拖延","暴饮暴食","冲动消费"]
@@ -228,7 +228,7 @@ Page {
             interval: 60000
             repeat: true
             onTriggered: {
-                if (root.prankOn) appCore.showToast("小助手提示你该休息了~")
+                if (root.prankOn) appCore.showToast("泉此方提示你该休息了~")
             }
         }
 

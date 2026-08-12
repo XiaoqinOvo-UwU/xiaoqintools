@@ -372,7 +372,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小助手工具 v3.0.1 · 元气满满每一天"
+                text: "小钦的工具 v3.0.2 · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
             }

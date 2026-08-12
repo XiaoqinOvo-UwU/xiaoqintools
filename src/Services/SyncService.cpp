@@ -14,7 +14,7 @@ SyncService::SyncService(QObject *parent)
 
 QString SyncService::defaultExportPath()
 {
-    return "C:/XiaoQinData/tools-data配置.json";
+    return ConfigService::instance().configDir() + "/配置导出.json";
 }
 
 bool SyncService::exportConfig(const QString &destPath)

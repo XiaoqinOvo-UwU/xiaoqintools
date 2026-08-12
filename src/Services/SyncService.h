@@ -12,5 +12,5 @@ public:
 
     Q_INVOKABLE bool exportConfig(const QString &destPath);
     Q_INVOKABLE bool importConfig(const QString &srcPath);
-    Q_INVOKABLE QString defaultExportPath(); // e.g. C:/XiaoQinData/tools-data配置.json
+    Q_INVOKABLE QString defaultExportPath(); // %APPDATA%/XiaoQinTools/配置导出.json
 };

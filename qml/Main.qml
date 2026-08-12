@@ -12,7 +12,7 @@ ApplicationWindow {
     minimumWidth: 900
     minimumHeight: 600
     visible: true
-    title: "小助手工具"
+    title: "小钦的工具"
     color: Theme.bg
 
     // Global dark palette so Quick Controls render dark.
@@ -317,7 +317,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小助手工具 v3.0.1"
+                        text: "小钦的工具 v3.0.2"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }

@@ -31,7 +31,7 @@ QString SystemService::cleanJunk()
             else if (f.isDir()) { QDir(f.absoluteFilePath()).removeRecursively(); }
         }
     }
-    return "小助手替你扫走垃圾了 不用谢~ (释放 " + QString::number(freed / 1024 / 1024) + " MB)";
+    return "泉此方替你扫走垃圾了 不用谢~ (释放 " + QString::number(freed / 1024 / 1024) + " MB)";
 }
 
 void SystemService::cleanJunkAsync()
@@ -59,7 +59,7 @@ void SystemService::cleanJunkAsync()
                 else if (f.isDir()) { QDir(f.absoluteFilePath()).removeRecursively(); }
             }
         }
-        return "小助手替你扫走垃圾了 不用谢~ (释放 " + QString::number(freed / 1024 / 1024) + " MB)";
+        return "泉此方替你扫走垃圾了 不用谢~ (释放 " + QString::number(freed / 1024 / 1024) + " MB)";
     });
     watcher->setFuture(future);
 }
@@ -68,7 +68,7 @@ QString SystemService::cleanMemory()
 {
     // Best-effort: flush caches via a short GC isn't available in C++/Qt directly.
     // On Windows we can call EmptyWorkingSet for our process; keep message friendly.
-    return "小助手替你扫走内存垃圾了 不用谢~";
+    return "泉此方替你扫走内存垃圾了 不用谢~";
 }
 
 QString SystemService::listStartupItems()

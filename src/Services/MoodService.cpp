@@ -1,4 +1,5 @@
 #include "MoodService.h"
+#include "ConfigService.h"
 
 #include <QDir>
 #include <QFile>
@@ -12,8 +13,8 @@ MoodService::MoodService(QObject *parent)
 
 QString MoodService::diaryPath() const
 {
-    // Keep the 杂货铺 convention.
-    const QString dir = "C:/XiaoQinData/心情日记";
+    // diary lives in %APPDATA% so it survives deleting the tool directory
+    const QString dir = ConfigService::instance().configDir() + "/diary";
     QDir().mkpath(dir);
     return dir + "/心情日记.txt";
 }
