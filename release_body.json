@@ -1,1 +1,0 @@
-{"tag_name":"v3.1.7","name":"v3.1.7","body":"## 小钦的工具 v3.1.7\n\n### 修复\n- 修复 AI 联系人卡面消失的问题（contactAvatarPath 未声明 Q_INVOKABLE 导致列表刷新中断）"}

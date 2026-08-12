@@ -10,3 +10,14 @@ install-test2/
 zip-test/
 zip-install/
 ChineseSimplified.isl
+*.json
+*.zip
+*.exe
+*.7z
+*.lnk
+*.txt
+build_console/
+build/
+dist/
+installer/*.exe
+test-*/
