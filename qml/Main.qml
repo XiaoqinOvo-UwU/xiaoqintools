@@ -844,7 +844,7 @@ ApplicationWindow {
         interval: 2500
         repeat: false
         onTriggered: {
-            islandToast.show("当前运行的是旧副本，建议用安装器重新安装到 Program Files 以获得更新", 8000)
+            islandToast.show("当前是旧副本，请用安装器重新安装到 Program Files", 6000)
         }
     }
 

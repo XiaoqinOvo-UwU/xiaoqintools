@@ -9,8 +9,8 @@ import QtQuick.Layouts
 Rectangle {
     id: island
     visible: false
-    width: Math.min(440, Math.max(text.implicitWidth + 56, choiceRow.implicitWidth + 56))
-    height: choiceRow.visible ? 84 : 46
+    width: Math.min(460, Math.max(text.implicitWidth + 56, choiceRow.implicitWidth + 56))
+    height: choiceRow.visible ? 84 : (text.lineCount > 1 ? text.height + 30 : 46)
     radius: height / 2
     color: "#1A1A1E"
     border.color: "#2E2E38"
@@ -53,6 +53,8 @@ Rectangle {
         anchors.fill: parent
         anchors.leftMargin: 18
         anchors.rightMargin: 18
+        anchors.topMargin: 10
+        anchors.bottomMargin: 10
         spacing: 0
 
         Text {
@@ -63,8 +65,8 @@ Rectangle {
             font.pixelSize: 13
             text: island.message
             horizontalAlignment: Text.AlignHCenter
-            elide: Text.ElideRight
-            maximumLineCount: 1
+            wrapMode: Text.Wrap
+            lineHeight: 1.2
         }
 
         RowLayout {
