@@ -313,14 +313,19 @@ Rectangle {
     function sendMsg() {
         var t = chatInput.text.trim()
         if (t.length === 0) return
-        msgModel.append({ "isAi": false, "msg": t })
-        saveMsg(currentContactId, false, t)
+        // critical path first: clear input + send to AI, so a DB hiccup never
+        // blocks the message or leaves the input text stuck
         chatInput.text = ""
-        // placeholder AI bubble with typing indicator, replaced in-place by the reply (TG style)
+        msgModel.append({ "isAi": false, "msg": t })
         msgModel.append({ "isAi": true, "msg": "..." })
         msgView.positionViewAtEnd()
         setHeaderStatus(aiService.aiName() + " 正在输入...")
         aiService.sendMessage(t)
+        // persistence is best-effort; never let it break the chat
+        try {
+            var cid = currentContactId.length > 0 ? currentContactId : contactService.currentId()
+            if (cid.length > 0) saveMsg(cid, false, t)
+        } catch (e) { }
     }
 
     function setHeaderStatus(s) {
@@ -361,18 +366,23 @@ Rectangle {
             } else {
                 msgModel.append({ "isAi": true, "msg": pendingReply })
             }
-            // persist the AI reply (replace the placeholder row: update last saved row if it was a placeholder)
-            var db = chatDb()
-            db.transaction(function(tx) {
-                tx.executeSql("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, contact TEXT, isAi INTEGER, msg TEXT)")
-                var rs = tx.executeSql("SELECT id FROM messages WHERE contact=? AND isAi=1 ORDER BY id DESC LIMIT 1", [currentContactId])
-                if (rs.rows.length > 0)
-                    tx.executeSql("UPDATE messages SET msg=? WHERE id=?", [pendingReply, rs.rows.item(0).id])
-                else
-                    tx.executeSql("INSERT INTO messages (contact, isAi, msg) VALUES (?,1,?)", [currentContactId, pendingReply])
-            })
             msgView.positionViewAtEnd()
             setHeaderStatus("在线")
+            // persistence is best-effort
+            try {
+                var cid = currentContactId.length > 0 ? currentContactId : contactService.currentId()
+                if (cid.length > 0) {
+                    var db = chatDb()
+                    db.transaction(function(tx) {
+                        tx.executeSql("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, contact TEXT, isAi INTEGER, msg TEXT)")
+                        var rs = tx.executeSql("SELECT id FROM messages WHERE contact=? AND isAi=1 ORDER BY id DESC LIMIT 1", [cid])
+                        if (rs.rows.length > 0)
+                            tx.executeSql("UPDATE messages SET msg=? WHERE id=?", [pendingReply, rs.rows.item(0).id])
+                        else
+                            tx.executeSql("INSERT INTO messages (contact, isAi, msg) VALUES (?,1,?)", [cid, pendingReply])
+                    })
+                }
+            } catch (e) { }
         }
     }
 
