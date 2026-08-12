@@ -175,18 +175,20 @@ QString AiService::greeting()
     QString mem = readMemory();
     QDateTime now = QDateTime::currentDateTime();
     int hour = now.time().hour();
+    QString uname = ConfigService::instance().userName();
+    if (uname.isEmpty()) uname = "用户";
 
     QStringList lines;
     if (hour >= 5 && hour < 11)
-        lines << "早上好，小钦。";
+        lines << "早上好，" + uname + "。";
     else if (hour >= 11 && hour < 14)
-        lines << "中午好，小钦。";
+        lines << "中午好，" + uname + "。";
     else if (hour >= 14 && hour < 18)
-        lines << "下午好，小钦。";
+        lines << "下午好，" + uname + "。";
     else if (hour >= 18 && hour < 23)
-        lines << "晚上好，小钦。";
+        lines << "晚上好，" + uname + "。";
     else
-        lines << "这么晚了还没睡……小钦？";
+        lines << "这么晚了还没睡……" + uname + "？";
 
     // yesterday usage minutes
     QDate yesterday = QDate::currentDate().addDays(-1);

@@ -46,8 +46,8 @@ private:
     QString m_apiKey;
     QString m_clashPath;
     QString m_v2rayPath;
-    QString m_userName = "小钦";
-    QString m_avatarChar = "钦";
+    QString m_userName = "用户";
+    QString m_avatarChar = "用";
     QString m_aiName = "AI助手";
     QString m_aiPersonality = "温柔、可爱、像朋友";
 };

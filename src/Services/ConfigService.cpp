@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QProcessEnvironment>
 #include <QCoreApplication>
+#include <QSettings>
 
 ConfigService &ConfigService::instance()
 {
@@ -69,25 +70,151 @@ QString ConfigService::detectClashExe() const
     const QStringList candidates = {
         "C:/Program Files/Clash Verge/clash-verge.exe",
         "C:/Program Files (x86)/Clash Verge/clash-verge.exe",
-        QDir::home().filePath("AppData/Local/Programs/clash-verge/clash-verge.exe"),
+        "D:/Program Files/Clash Verge/clash-verge.exe",
         "D:/Clash Verge/clash-verge.exe",
+        "E:/Clash Verge/clash-verge.exe",
+        QDir::home().filePath("AppData/Local/Programs/clash-verge/clash-verge.exe"),
+        QDir::home().filePath("AppData/Local/Clash Verge/clash-verge.exe"),
+        QDir::home().filePath("Downloads/Clash Verge/clash-verge.exe"),
+        QDir::home().filePath("Desktop/Clash Verge/clash-verge.exe"),
+        "C:/Clash Verge/clash-verge.exe",
     };
     for (const QString &c : candidates)
         if (QFile::exists(c)) return c;
+
+    // registry uninstall entries (HKCU + HKLM, both 64/32 views)
+    const QStringList keys = {
+        "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        "HKEY_LOCAL_MACHINE\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+    };
+    for (const QString &k : keys) {
+        QSettings s(k, QSettings::NativeFormat);
+        for (const QString &sub : s.childGroups()) {
+            s.beginGroup(sub);
+            QString disp = s.value("DisplayName").toString();
+            QString loc = s.value("InstallLocation").toString();
+            QString exe = s.value("DisplayIcon").toString();
+            s.endGroup();
+            if (disp.contains("Clash", Qt::CaseInsensitive) || exe.contains("clash-verge", Qt::CaseInsensitive)) {
+                // try install location first, then the DisplayIcon path
+                QString p = loc + "/clash-verge.exe";
+                if (QFile::exists(p)) return p;
+                QString p2 = loc + "/Clash Verge.exe";
+                if (QFile::exists(p2)) return p2;
+                QString icon = exe.section(',', 0, 0);
+                if (QFile::exists(icon)) return icon;
+            }
+        }
+    }
+
+    // portable Clash Verge (green build) fallback: search common roots
+    const QStringList clashRoots = {
+        QDir::homePath() + "/Desktop",
+        QDir::homePath() + "/Desktop/梯子",
+        QDir::homePath() + "/Downloads",
+        "C:/",
+        "D:/",
+        "E:/",
+    };
+    for (const QString &root : clashRoots) {
+        QDir dir(root);
+        if (!dir.exists()) continue;
+        const auto entries = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        for (const QFileInfo &d : entries) {
+            if (d.fileName().contains("clash", Qt::CaseInsensitive)) {
+                QString p1 = d.absoluteFilePath() + "/clash-verge.exe";
+                if (QFile::exists(p1)) return p1;
+                QString p2 = d.absoluteFilePath() + "/Clash Verge.exe";
+                if (QFile::exists(p2)) return p2;
+                // portable Rev: clash-verge folder may contain a nested app dir
+                QDir sub(d.absoluteFilePath());
+                const auto subs = sub.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+                for (const QFileInfo &sd : subs) {
+                    QString deeper = sd.absoluteFilePath() + "/clash-verge.exe";
+                    if (QFile::exists(deeper)) return deeper;
+                }
+            }
+        }
+    }
     return {};
 }
 
 QString ConfigService::detectV2rayExe() const
 {
     const QString desk = QDir::homePath() + "/Desktop";
+    const QString downloads = QDir::homePath() + "/Downloads";
     const QStringList candidates = {
         desk + "/梯子/v2rayN-windows-64-SelfContained/v2rayN.exe",
         desk + "/v2rayN-windows-64-SelfContained/v2rayN.exe",
         desk + "/v2rayN/v2rayN.exe",
+        desk + "/梯子/v2rayN/v2rayN.exe",
+        desk + "/梯子/v2rayN-windows-64/v2rayN.exe",
+        downloads + "/v2rayN-windows-64-SelfContained/v2rayN.exe",
+        downloads + "/v2rayN/v2rayN.exe",
+        downloads + "/梯子/v2rayN-windows-64-SelfContained/v2rayN.exe",
         "C:/v2rayN/v2rayN.exe",
+        "C:/Program Files/v2rayN/v2rayN.exe",
+        "C:/Program Files (x86)/v2rayN/v2rayN.exe",
         "D:/v2rayN/v2rayN.exe",
+        "D:/Program Files/v2rayN/v2rayN.exe",
+        "E:/v2rayN/v2rayN.exe",
+        QDir::home().filePath("AppData/Local/Programs/v2rayN/v2rayN.exe"),
     };
     for (const QString &c : candidates)
         if (QFile::exists(c)) return c;
+
+    // registry uninstall entries
+    const QStringList keys = {
+        "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        "HKEY_LOCAL_MACHINE\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+    };
+    for (const QString &k : keys) {
+        QSettings s(k, QSettings::NativeFormat);
+        for (const QString &sub : s.childGroups()) {
+            s.beginGroup(sub);
+            QString disp = s.value("DisplayName").toString();
+            QString loc = s.value("InstallLocation").toString();
+            QString exe = s.value("DisplayIcon").toString();
+            s.endGroup();
+            if (disp.contains("v2ray", Qt::CaseInsensitive) || exe.contains("v2rayN", Qt::CaseInsensitive)) {
+                QString p = loc + "/v2rayN.exe";
+                if (QFile::exists(p)) return p;
+                QString icon = exe.section(',', 0, 0);
+                if (QFile::exists(icon)) return icon;
+            }
+        }
+    }
+
+    // v2rayN is commonly a green/portable build without registry entry:
+    // search likely roots up to 3 levels deep, skipping huge dirs.
+    const QStringList roots = {
+        QDir::homePath() + "/Desktop",
+        QDir::homePath() + "/Downloads",
+        QDir::homePath() + "/Documents",
+        QDir::homePath() + "/Desktop/梯子",
+        "C:/",
+        "D:/",
+        "E:/",
+    };
+    for (const QString &root : roots) {
+        QDir dir(root);
+        if (!dir.exists()) continue;
+        const auto entries = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        for (const QFileInfo &d : entries) {
+            if (d.fileName().contains("v2ray", Qt::CaseInsensitive)) {
+                QString direct = d.absoluteFilePath() + "/v2rayN.exe";
+                if (QFile::exists(direct)) return direct;
+                // one level deeper (e.g. v2rayN-windows-64-SelfContained)
+                QDir sub(d.absoluteFilePath());
+                const auto subs = sub.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+                for (const QFileInfo &sd : subs) {
+                    QString deeper = sd.absoluteFilePath() + "/v2rayN.exe";
+                    if (QFile::exists(deeper)) return deeper;
+                }
+            }
+        }
+    }
     return {};
 }
