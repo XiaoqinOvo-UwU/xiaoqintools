@@ -74,4 +74,12 @@ private:
     static QString callDeepSeekStatic(const QString &system, const QString &user);
     QString jsonGet(const QString &json, const QString &key);
     QString jsonSet(const QString &json, const QString &key, const QString &value);
+
+    // auto memory: after N user turns, summarize the recent chat into a short note
+    void trackChatTurn(const QString &userText, const QString &aiReply);
+    void maybeSummarize();
+    void appendNote(const QString &note);
+    QStringList m_chatBuffer;   // recent turns (user/ai pairs), bounded
+    int m_userTurns = 0;        // user messages since last summary
+    bool m_summarizing = false;
 };

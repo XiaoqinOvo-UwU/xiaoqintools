@@ -532,6 +532,66 @@ void AiService::clearMemory()
     if (!created.isEmpty()) o.insert("created", created);
     o.insert("clearedAt", QDateTime::currentDateTime().toString(Qt::ISODate));
     writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
+    m_chatBuffer.clear();
+    m_userTurns = 0;
+}
+
+// ---- auto memory: after 3+ user turns, condense the recent chat into a short note ----
+void AiService::trackChatTurn(const QString &userText, const QString &aiReply)
+{
+    if (userText.isEmpty()) return;
+    // keep the last 12 turns in the buffer (short texts only)
+    QString us = userText.left(200);
+    QString as = aiReply.left(200);
+    m_chatBuffer.append("用户: " + us);
+    if (!as.isEmpty())
+        m_chatBuffer.append(aiName() + ": " + as);
+    while (m_chatBuffer.size() > 24)
+        m_chatBuffer.removeFirst();
+    maybeSummarize();
+}
+
+void AiService::maybeSummarize()
+{
+    // summarize after 3 user turns since the last summary
+    if (m_userTurns < 3 || m_summarizing || m_chatBuffer.isEmpty()) return;
+    m_summarizing = true;
+
+    QString chat = m_chatBuffer.join("\n");
+    QString prompt = "下面是用户与AI的一段对话：\n\n" + chat
+        + "\n\n请用最多 2 句话，简短提炼对话中值得长期记住的关于用户的信息"
+          "（喜好、习惯、重要事件、情绪、近况等）。如果没什么值得记的，只输出「无」。"
+          "只输出提炼内容本身，不要解释。";
+    auto *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
+        QString note = watcher->result().trimmed();
+        watcher->deleteLater();
+        m_summarizing = false;
+        if (note.isEmpty() || note == "无") return;
+        appendNote(note);
+    });
+    QFuture<QString> future = QtConcurrent::run([prompt]() {
+        return callDeepSeekStatic("你是记忆整理助手，只做简洁提炼。", prompt);
+    });
+    watcher->setFuture(future);
+}
+
+void AiService::appendNote(const QString &note)
+{
+    QString mem = readMemory();
+    QJsonDocument d = QJsonDocument::fromJson(mem.toUtf8());
+    QJsonObject o = d.isObject() ? d.object() : QJsonObject();
+    QJsonArray notes = o.value("notes").toArray();
+    if (notes.size() >= 100) { // bound
+        QJsonArray kept;
+        for (int i = notes.size() - 99; i < notes.size(); i++) kept.append(notes.at(i));
+        notes = kept;
+    }
+    notes.append(note + "（" + QDate::currentDate().toString("yyyy-MM-dd") + "）");
+    o.insert("notes", notes);
+    writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
+    m_userTurns = 0;      // restart the counting window
+    m_chatBuffer.clear(); // fresh window
 }
 
 // ---- DeepSeek chat (AIRI-style: bucketed context + time prefix + emotion tokens) ----
@@ -543,6 +603,10 @@ void AiService::sendMessage(const QString &text)
     QString personality = ContactService::instance().currentPersonality();
     int hour = QTime::currentTime().hour();
     QString period = hour < 11 ? "早上" : hour < 14 ? "中午" : hour < 18 ? "下午" : hour < 23 ? "晚上" : "深夜";
+
+    // remember this user turn for auto memory (after N turns we summarize)
+    QString userForMemory = text.trimmed();
+    m_userTurns++;
 
     // Bucket 1: persona + rules (system prompt)
     QString system = "你是" + ai + "，性格" + personality + "，用户叫" + user + "。\n"
@@ -567,7 +631,7 @@ void AiService::sendMessage(const QString &text)
                       + text + "\n" + contextBlock;
 
     auto *watcher = new QFutureWatcher<QString>(this);
-    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, userForMemory]() {
         QString raw = watcher->result();
 
         // strip <think> tags the model may add on its own
@@ -621,6 +685,9 @@ void AiService::sendMessage(const QString &text)
         }
         emit chatReply(speech.isEmpty() ? raw : speech);
         watcher->deleteLater();
+
+        // auto memory: track this turn, summarize after enough turns
+        trackChatTurn(userForMemory, speech.isEmpty() ? raw : speech);
     });
     QFuture<QString> future = QtConcurrent::run([system, userMsg]() {
         return callDeepSeekStatic(system, userMsg);
