@@ -1,5 +1,8 @@
 #include "AppCore.h"
 
+#include <QCoreApplication>
+#include <QDir>
+
 AppCore &AppCore::instance()
 {
     static AppCore inst;
@@ -31,4 +34,17 @@ void AppCore::showToast(const QString &msg)
     m_toastMsg = msg;
     m_toastSeq++;
     emit toastRequested();
+}
+
+bool AppCore::isProperLocation()
+{
+    QString dir = QDir::toNativeSeparators(QCoreApplication::applicationDirPath());
+    // recognized locations:
+    //  - installed: ...\Program Files\XiaoQinTools  (or Program Files (x86))
+    //  - dev copy:  C:\XiaoQinTools\dist
+    if (dir.contains("Program Files", Qt::CaseInsensitive) && dir.endsWith("XiaoQinTools"))
+        return true;
+    if (dir.compare("C:\\XiaoQinTools\\dist", Qt::CaseInsensitive) == 0)
+        return true;
+    return false;
 }

@@ -1,6 +1,6 @@
-; 小钦的工具 v3.2.0 安装脚本
+; 小钦的工具 v3.2.2 安装脚本
 #define MyAppName "小钦的工具"
-#define MyAppVersion "3.2.0"
+#define MyAppVersion "3.2.2"
 #define MyAppExeName "XiaoQinTools.exe"
 #define MyAppPublisher "XiaoQinUwU"
 #define MyAppURL "https://github.com/xiaoqinnb666/xiaoqintools"
@@ -21,6 +21,8 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+; 强制覆盖旧的重复安装（同 AppId 自动升级）
+UsePreviousAppDir=no
 ; 安装后可卸载，但保留 %APPDATA% 数据
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
@@ -39,4 +41,50 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
+; 静默安装（自动更新）后也自动启动新程序，确保用户看到的永远是最新版
+Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall
+
+[Code]
+// 清理旧副本：删除其他位置残留的 XiaoQinTools 安装（跳过正式安装目录）
+procedure CleanupStrayCopies();
+var
+  appDir: String;
+  cands: TStringList;
+  i: Integer;
+  subDir: String;
+begin
+  appDir := LowerCase(ExpandConstant('{app}'));
+
+  cands := TStringList.Create;
+  try
+    // 已知的旧副本候选位置（深度 1-2）
+    cands.Add(ExpandConstant('{userdesktop}') + '\xiaoqintools-test');
+    cands.Add(ExpandConstant('{userdesktop}') + '\XiaoQinTools');
+    cands.Add(ExpandConstant('{userdesktop}') + '\小钦的工具');
+    cands.Add(ExpandConstant('{%USERPROFILE}\Downloads') + '\xiaoqintools-test');
+    cands.Add(ExpandConstant('{%USERPROFILE}\Documents') + '\XiaoQinTools');
+    cands.Add('C:\XiaoQinTools\dist_old');
+    cands.Add('C:\XiaoQinTools\test-311');
+    cands.Add('C:\XiaoQinTools\zip-install');
+
+    for i := 0 to cands.Count - 1 do begin
+      subDir := cands[i];
+      if DirExists(subDir) then begin
+        if FileExists(subDir + '\XiaoQinTools.exe') then begin
+          if LowerCase(subDir) <> appDir then begin
+            // 保留 %APPDATA% 数据，只删程序目录
+            DelTree(subDir, True, True, True);
+          end;
+        end;
+      end;
+    end;
+  finally
+    cands.Free;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    CleanupStrayCopies();
+end;

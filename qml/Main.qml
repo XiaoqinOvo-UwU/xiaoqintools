@@ -279,8 +279,8 @@ ApplicationWindow {
                                 // setCurrent fires contactsChanged -> refreshProfile (reentrant),
                                 // so chatOpen must come before it or the signal chain breaks.
                                 contactService.setCurrent(cid)
+                                chatPage.openContact(cid)
                                 root.chatOpen = true
-                                chatPage.resetChat()
                                 root.refreshProfile()
                             }
                         }
@@ -367,7 +367,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.2.0"
+                        text: "小钦的工具 v3.2.2"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -833,7 +833,19 @@ ApplicationWindow {
             aiService.generateGreeting()
             aiService.markGreeted()
         }
+        // warn when running from a stray copy (not the installed location)
+        if (!appCore.isProperLocation())
+            locationWarnTimer.start()
         idleTimer.start()
+    }
+
+    Timer {
+        id: locationWarnTimer
+        interval: 2500
+        repeat: false
+        onTriggered: {
+            islandToast.show("当前运行的是旧副本，建议用安装器重新安装到 Program Files 以获得更新", 8000)
+        }
     }
 
     Connections {

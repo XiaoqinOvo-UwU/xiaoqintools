@@ -25,6 +25,9 @@ public:
     QString toastMessage() const { return m_toastMsg; }
     int toastSeq() const { return m_toastSeq; }
 
+    // returns true if the exe runs from a recognized install location
+    Q_INVOKABLE bool isProperLocation();
+
 signals:
     void statusTextChanged();
     void toastRequested();

@@ -1,9 +1,11 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.LocalStorage
 import "../Components"
 
 // Full-screen chat page (QQ/WeChat style), opened from the sidebar AI card.
+// Conversation is persisted per contact (SQLite) — reopening keeps the same chat.
 Rectangle {
     id: chatPage
     color: Theme.bg
@@ -13,11 +15,42 @@ Rectangle {
     opacity: 0
     x: -width
 
-    // reset conversation when switching to another AI contact
-    function resetChat() {
-        msgModel.clear()
-        msgModel.append({ "isAi": true, "msg": "你好，我是" + aiService.aiName() + "。" })
-        lastGreetedId = aiService.aiName()
+    // ---- persistent per-contact chat (same conversation every time) ----
+    function chatDb() {
+        return LocalStorage.openDatabaseSync("XiaoQinChat", "1.0", "chat history", 8*1024*1024)
+    }
+
+    function loadChat(contactId) {
+        var db = chatDb()
+        db.transaction(function(tx) {
+            tx.executeSql("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, contact TEXT, isAi INTEGER, msg TEXT)")
+            var rs = tx.executeSql("SELECT isAi, msg FROM messages WHERE contact=? ORDER BY id", [contactId])
+            msgModel.clear()
+            for (var i = 0; i < rs.rows.length; i++)
+                msgModel.append({ "isAi": rs.rows.item(i).isAi === 1, "msg": rs.rows.item(i).msg })
+        })
+        // if this contact has no history yet, show a greeting bubble
+        if (msgModel.count === 0)
+            msgModel.append({ "isAi": true, "msg": "你好，我是" + aiService.aiName() + "。" })
+        msgView.positionViewAtEnd()
+    }
+
+    function saveMsg(contactId, isAi, msg) {
+        var db = chatDb()
+        db.transaction(function(tx) {
+            tx.executeSql("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, contact TEXT, isAi INTEGER, msg TEXT)")
+            tx.executeSql("INSERT INTO messages (contact, isAi, msg) VALUES (?,?,?)", [contactId, isAi ? 1 : 0, msg])
+            // keep history bounded (last 400)
+            tx.executeSql("DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages WHERE contact=? ORDER BY id DESC LIMIT 400)", [contactId])
+        })
+    }
+
+    property string currentContactId: ""
+
+    // switch to a contact: load its conversation (no reset)
+    function openContact(id) {
+        currentContactId = id
+        loadChat(id)
     }
 
     onVisibleChanged: {
@@ -25,8 +58,12 @@ Rectangle {
             x = -width
             opacity = 0
             openAnim.restart()
-            if (msgModel.count === 0)
-                msgModel.append({ "isAi": true, "msg": "你好，我是" + aiService.aiName() + "。" })
+            // load the current contact's history whenever the page shows
+            var cid = contactService.currentId()
+            if (currentContactId !== cid) {
+                currentContactId = cid
+                loadChat(cid)
+            }
         } else {
             // reset so the next open always starts from the left
             x = -width
@@ -277,6 +314,7 @@ Rectangle {
         var t = chatInput.text.trim()
         if (t.length === 0) return
         msgModel.append({ "isAi": false, "msg": t })
+        saveMsg(currentContactId, false, t)
         chatInput.text = ""
         // placeholder AI bubble with typing indicator, replaced in-place by the reply (TG style)
         msgModel.append({ "isAi": true, "msg": "..." })
@@ -323,6 +361,16 @@ Rectangle {
             } else {
                 msgModel.append({ "isAi": true, "msg": pendingReply })
             }
+            // persist the AI reply (replace the placeholder row: update last saved row if it was a placeholder)
+            var db = chatDb()
+            db.transaction(function(tx) {
+                tx.executeSql("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, contact TEXT, isAi INTEGER, msg TEXT)")
+                var rs = tx.executeSql("SELECT id FROM messages WHERE contact=? AND isAi=1 ORDER BY id DESC LIMIT 1", [currentContactId])
+                if (rs.rows.length > 0)
+                    tx.executeSql("UPDATE messages SET msg=? WHERE id=?", [pendingReply, rs.rows.item(0).id])
+                else
+                    tx.executeSql("INSERT INTO messages (contact, isAi, msg) VALUES (?,1,?)", [currentContactId, pendingReply])
+            })
             msgView.positionViewAtEnd()
             setHeaderStatus("在线")
         }
