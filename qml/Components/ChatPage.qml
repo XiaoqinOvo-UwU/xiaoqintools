@@ -43,7 +43,10 @@ Rectangle {
             // keep history bounded (last 400)
             tx.executeSql("DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages WHERE contact=? ORDER BY id DESC LIMIT 400)", [contactId])
         })
+        chatPage.messageSaved(contactId, isAi, msg)
     }
+
+    signal messageSaved(string contactId, bool isAi, string msg)
 
     property string currentContactId: ""
 
@@ -381,6 +384,7 @@ Rectangle {
                         else
                             tx.executeSql("INSERT INTO messages (contact, isAi, msg) VALUES (?,1,?)", [cid, pendingReply])
                     })
+                    chatPage.messageSaved(cid, true, pendingReply)
                 }
             } catch (e) { }
         }

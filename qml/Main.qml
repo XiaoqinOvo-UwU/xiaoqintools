@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import QtQuick.LocalStorage
 import "Pages"
 import "Components"
 
@@ -37,6 +38,23 @@ ApplicationWindow {
     // contact list model (id|name|hasAvatar)
     ListModel { id: contactModel }
 
+    // read the last message of a contact from the chat DB (preview)
+    function lastMsgFor(contactId) {
+        try {
+            var db = LocalStorage.openDatabaseSync("XiaoQinChat", "1.0", "chat history", 8*1024*1024)
+            var preview = ""
+            db.transaction(function(tx) {
+                tx.executeSql("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, contact TEXT, isAi INTEGER, msg TEXT)")
+                var rs = tx.executeSql("SELECT isAi, msg FROM messages WHERE contact=? ORDER BY id DESC LIMIT 1", [contactId])
+                if (rs.rows.length > 0) {
+                    var m = rs.rows.item(0)
+                    preview = (m.isAi === 1 ? "" : "我: ") + m.msg
+                }
+            })
+            return preview
+        } catch (e) { return "" }
+    }
+
     function refreshContacts() {
         contactModel.clear()
         var list = contactService.contactList()
@@ -48,7 +66,7 @@ ApplicationWindow {
                     var raw = contactService.contactAvatarPath(parts[0])
                     avatarUrl = raw.length > 0 ? "file:///" + raw.replace(/\\/g, "/") : ""
                 }
-                contactModel.append({ "cid": parts[0], "cname": parts[1], "hasAvatar": parts[2], "avatarUrl": avatarUrl })
+                contactModel.append({ "cid": parts[0], "cname": parts[1], "hasAvatar": parts[2], "avatarUrl": avatarUrl, "lastMsg": lastMsgFor(parts[0]) })
             }
         }
     }
@@ -269,10 +287,14 @@ ApplicationWindow {
                                     font.pixelSize: 13
                                     font.bold: cid === contactService.currentId()
                                 }
+                                // live conversation preview (last message), falls back to a hint
                                 Text {
-                                    text: "点击开始聊天"
+                                    text: lastMsg.length > 0 ? lastMsg : "点击开始聊天"
                                     color: Theme.textDim
                                     font.pixelSize: 10
+                                    elide: Text.ElideRight
+                                    maximumLineCount: 1
+                                    width: parent.width
                                 }
                             }
                             Text {
@@ -381,7 +403,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.3.3"
+                        text: "小钦的工具 v3.3.4"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -893,6 +915,21 @@ ApplicationWindow {
         }
         function onProfileChanged() {
             root.refreshProfile()
+        }
+    }
+
+    Connections {
+        target: chatPage
+        function onMessageSaved(contactId, isAi, msg) {
+            // update the contact card preview in place
+            for (var i = 0; i < contactModel.count; i++) {
+                var it = contactModel.get(i)
+                if (it.cid === contactId) {
+                    var preview = (isAi ? "" : "我: ") + msg
+                    contactModel.set(i, { "cid": it.cid, "cname": it.cname, "hasAvatar": it.hasAvatar, "avatarUrl": it.avatarUrl, "lastMsg": preview })
+                    break
+                }
+            }
         }
     }
 
