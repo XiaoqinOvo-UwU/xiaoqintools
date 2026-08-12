@@ -42,8 +42,14 @@ ApplicationWindow {
         var list = contactService.contactList()
         for (var i = 0; i < list.length; i++) {
             var parts = list[i].split("|")
-            if (parts.length >= 3)
-                contactModel.append({ "cid": parts[0], "cname": parts[1], "hasAvatar": parts[2] })
+            if (parts.length >= 3) {
+                var avatarUrl = ""
+                if (parts[2] === "1") {
+                    var raw = contactService.contactAvatarPath(parts[0])
+                    avatarUrl = raw.length > 0 ? "file:///" + raw.replace(/\\/g, "/") : ""
+                }
+                contactModel.append({ "cid": parts[0], "cname": parts[1], "hasAvatar": parts[2], "avatarUrl": avatarUrl })
+            }
         }
     }
 
@@ -228,13 +234,13 @@ ApplicationWindow {
                                 clip: true
                                 Image {
                                     anchors.fill: parent
-                                    visible: hasAvatar === "1"
-                                    source: "file:///" + contactService.contactAvatarPath(cid).replace(/\\/g, "/")
+                                    visible: avatarUrl.length > 0
+                                    source: avatarUrl
                                     fillMode: Image.PreserveAspectCrop
                                 }
                                 Text {
                                     anchors.centerIn: parent
-                                    visible: hasAvatar !== "1"
+                                    visible: avatarUrl.length === 0
                                     text: cname.length > 0 ? cname.charAt(0) : "A"
                                     color: "white"
                                     font.pixelSize: 14
@@ -361,7 +367,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.1.4"
+                        text: "小钦的工具 v3.1.5"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
