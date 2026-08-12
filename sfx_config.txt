@@ -1,7 +1,0 @@
-;!@Install@!UTF-8!
-Title="小钦的工具 3.0.1"
-BeginPrompt="安装「小钦的工具 v3.0.1」到 C:\XiaoQinTools\dist ？"
-InstallPath="C:\XiaoQinTools\dist"
-RunProgram="powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"setup.ps1\""
-ExecuteFile="XiaoQinTools.exe"
-;!@InstallEnd@!

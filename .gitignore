@@ -1,1 +1,7 @@
 .git
+build/
+dist/
+build_console/
+dist_full.7z
+*.exe
+sfx_config.txt
