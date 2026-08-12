@@ -19,6 +19,7 @@ Page {
     }
 
     function launchProxy(which) {
+        appCore.setStatus("打开梯子中...")
         var ok = which === "Clash" ? proxyService.launchClash() : proxyService.launchV2ray()
         notify(ok ? "已打开 " + which : "打开失败")
         if (ok) statsService.record("proxy", which)

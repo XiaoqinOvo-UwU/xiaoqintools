@@ -295,7 +295,7 @@ Rectangle {
                         verticalAlignment: Text.AlignVCenter
                         onAccepted: sendMsg()
                         onTextChanged: {
-                            if (text.length > 0) appCore.setStatus("正在输入...")
+                            if (text.length > 0) appCore.setStatus("用户输入中...")
                             else appCore.setStatus("在线")
                         }
                     }

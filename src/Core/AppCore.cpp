@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QTemporaryFile>
+#include <QTimer>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <mmsystem.h>
@@ -32,6 +33,26 @@ void AppCore::setStatus(const QString &s)
     if (m_status != s) {
         m_status = s;
         emit statusTextChanged();
+    }
+    // transient statuses revert to "在线" after 4 seconds
+    if (s != "在线") {
+        m_revertSeq++;
+        int seq = m_revertSeq;
+        if (!m_revertTimer) {
+            m_revertTimer = new QTimer(this);
+            m_revertTimer->setSingleShot(true);
+            m_revertTimer->setInterval(4000);
+            connect(m_revertTimer, &QTimer::timeout, this, [this]() {
+                if (m_status != "在线") {
+                    m_status = "在线";
+                    emit statusTextChanged();
+                }
+            });
+        }
+        m_revertTimer->start();
+    } else {
+        m_revertSeq++; // any "在线" cancels pending revert logic (state is already online)
+        if (m_revertTimer) m_revertTimer->stop();
     }
 }
 

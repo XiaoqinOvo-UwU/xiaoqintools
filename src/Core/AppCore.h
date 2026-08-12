@@ -16,7 +16,7 @@ public:
     // status line for the right side / status area
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
     QString statusText() const { return m_status; }
-    Q_INVOKABLE void setStatus(const QString &s);
+    Q_INVOKABLE void setStatus(const QString &s);   // transient: reverts to "在线" after a few seconds
 
     // island toast
     Q_INVOKABLE void showToast(const QString &msg);
@@ -37,7 +37,9 @@ signals:
 
 private:
     explicit AppCore(QObject *parent = nullptr);
-    QString m_status = "就绪";
+    QString m_status = "在线";
     QString m_toastMsg;
     int m_toastSeq = 0;
+    class QTimer *m_revertTimer = nullptr;
+    int m_revertSeq = 0;      // guard so only the latest status reverts
 };
