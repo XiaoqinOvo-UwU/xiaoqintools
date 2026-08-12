@@ -289,40 +289,41 @@ Rectangle {
         headerStatus.color = s === "在线" ? Theme.ok : Theme.warn
     }
 
-    // human-like typing: reveal the reply character by character
+    // human-like reply delay: wait "typing time" proportional to text length,
+    // then reveal the full reply at once.
     function appendAi(text) {
-        typeTimer.stop()
-        typingText = text
-        typingPos = 0
+        replyTimer.stop()
+        pendingReply = text
         // ensure placeholder bubble exists
         if (msgModel.count === 0 || !msgModel.get(msgModel.count-1).isAi) {
-            msgModel.append({ "isAi": true, "msg": "" })
+            msgModel.append({ "isAi": true, "msg": "..." })
         }
+        // typing speed ~ 120ms per char, clamp to 1.5s ~ 12s
+        var ms = Math.round(text.length * 120)
+        ms = Math.max(1500, Math.min(ms, 12000))
+        replyTimer.interval = ms
         setHeaderStatus(aiService.aiName() + " 正在输入...")
-        typeTimer.start()
+        replyTimer.start()
     }
 
-    property string typingText: ""
-    property int typingPos: 0
+    property string pendingReply: ""
 
     Timer {
-        id: typeTimer
-        interval: 28
-        repeat: true
+        id: replyTimer
+        repeat: false
         onTriggered: {
-            var step = 3 // characters per tick (fast but human-like)
-            typingPos = Math.min(typingPos + step, typingText.length)
+            // reveal the full reply at once (after the simulated typing time)
             if (msgModel.count > 0) {
                 var last = msgModel.get(msgModel.count-1)
-                if (last.isAi) {
-                    msgModel.set(msgModel.count-1, { "isAi": true, "msg": typingText.substring(0, typingPos) })
-                }
+                if (last.isAi)
+                    msgModel.set(msgModel.count-1, { "isAi": true, "msg": pendingReply })
+                else
+                    msgModel.append({ "isAi": true, "msg": pendingReply })
+            } else {
+                msgModel.append({ "isAi": true, "msg": pendingReply })
             }
             msgView.positionViewAtEnd()
-            if (typingPos >= typingText.length) {
-                typeTimer.stop()
-                setHeaderStatus("在线")
-            }
+            setHeaderStatus("在线")
         }
     }
 
