@@ -3,7 +3,6 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
-#include <QDir>
 #include <QTemporaryFile>
 #ifdef Q_OS_WIN
 #include <windows.h>

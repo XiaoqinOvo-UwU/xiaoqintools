@@ -292,8 +292,8 @@ ApplicationWindow {
                                 // setCurrent fires contactsChanged -> refreshProfile (reentrant),
                                 // so chatOpen must come before it or the signal chain breaks.
                                 contactService.setCurrent(cid)
-                                chatPage.openContact(cid)
                                 root.chatOpen = true
+                                chatPage.openContact(cid)
                                 root.clearUnread()
                                 root.refreshProfile()
                             }
@@ -381,7 +381,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.3.0"
+                        text: "小钦的工具 v3.3.1"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
