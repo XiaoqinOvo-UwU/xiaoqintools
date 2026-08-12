@@ -1,0 +1,7 @@
+build/
+build_console/
+dist/
+*.zip
+*.exe
+*.7z
+*.lnk

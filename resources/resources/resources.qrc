@@ -1,0 +1,17 @@
+<RCC>
+    <qresource prefix="/">
+        <file>../qml/Main.qml</file>
+        <file>../qml/Components/ActionCard.qml</file>
+        <file>../qml/Components/AppButton.qml</file>
+        <file>../qml/Components/IslandToast.qml</file>
+        <file>../qml/Components/ChatPage.qml</file>
+        <file>../qml/Components/ReportDialog.qml</file>
+        <file>../qml/Components/Theme.qml</file>
+        <file>../qml/Components/qmldir</file>
+        <file>../qml/Pages/NetworkPage.qml</file>
+        <file>../qml/Pages/SystemPage.qml</file>
+        <file>../qml/Pages/EntertainmentPage.qml</file>
+        <file>../qml/Pages/SettingsPage.qml</file>
+        <file>icons/app.ico</file>
+    </qresource>
+</RCC>

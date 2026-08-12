@@ -1,0 +1,18 @@
+#pragma once
+#include <QObject>
+#include <QString>
+#include <QStringList>
+
+// Mood diary backed by a simple text file (ported from WinForms).
+// Moods are the cute option set the user chose.
+class MoodService : public QObject
+{
+    Q_OBJECT
+public:
+    explicit MoodService(QObject *parent = nullptr);
+
+    Q_INVOKABLE QStringList moodOptions() const;
+    Q_INVOKABLE bool recordMood(const QString &mood);       // append with timestamp
+    Q_INVOKABLE QString history();                          // full history text
+    QString diaryPath() const;
+};
