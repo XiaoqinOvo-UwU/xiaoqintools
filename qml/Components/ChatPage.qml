@@ -338,10 +338,10 @@ Rectangle {
     }
 
     // human-like reply delay: wait "typing time" proportional to text length,
-    // then reveal the full reply at once. Each reply uses its own timer so
-    // rapid consecutive messages don't cancel each other.
+    // then reveal the full reply at once. Each reply is processed one after
+    // another; rapid consecutive messages never cancel an earlier reply.
     function appendAi(text) {
-        // ensure placeholder bubble exists
+        // ensure a placeholder bubble exists for this reply
         if (msgModel.count === 0 || !msgModel.get(msgModel.count-1).isAi) {
             msgModel.append({ "isAi": true, "msg": "..." })
         }
@@ -349,24 +349,24 @@ Rectangle {
         var ms = Math.round(text.length * 120)
         ms = Math.max(1500, Math.min(ms, 12000))
         setHeaderStatus(aiService.aiName() + " 正在输入...")
-        replyTimers.append({ "text": text, "ms": ms, "left": 0 })
-        // process the queue: if nothing is showing, start the first one
-        if (!typingActive) startNextReply()
+        replyQueue.push({ "text": text, "ms": ms })
+        pumpReplies()
     }
 
-    property var replyTimers: []
-    property bool typingActive: false
-    property string activeReply: ""
+    property var replyQueue: []
+    property bool replyBusy: false
 
-    function startNextReply() {
-        if (replyTimers.length === 0) {
-            typingActive = false
-            setHeaderStatus("在线")
+    function pumpReplies() {
+        // nothing pending, nothing running -> done
+        if (replyQueue.length === 0) {
+            if (!replyBusy) setHeaderStatus("在线")
             return
         }
-        typingActive = true
-        var item = replyTimers[0]
-        activeReply = item.text
+        // a reply is currently being typed out; it will pump the next one
+        if (replyBusy) return
+        replyBusy = true
+        var item = replyQueue.shift()
+        chatPage.pendingReply = item.text
         replyTimer.interval = item.ms
         replyTimer.start()
     }
@@ -375,8 +375,9 @@ Rectangle {
         id: replyTimer
         repeat: false
         onTriggered: {
+            replyBusy = false
             // reveal this reply in the last AI placeholder bubble
-            var text = chatPage.activeReply
+            var text = chatPage.pendingReply
             if (msgModel.count > 0) {
                 var last = msgModel.get(msgModel.count-1)
                 if (last.isAi)
@@ -399,11 +400,12 @@ Rectangle {
                     chatPage.messageSaved(cid, true, text)
                 }
             } catch (e) { }
-            // advance the queue
-            chatPage.replyTimers.shift()
-            chatPage.startNextReply()
+            // process the next queued reply (if any)
+            chatPage.pumpReplies()
         }
     }
+
+    property string pendingReply: ""
 
     // exposed: AI avatar image path (empty = char avatar)
     property string aiAvatarSource: ""
