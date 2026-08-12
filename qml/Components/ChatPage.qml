@@ -115,42 +115,6 @@ Rectangle {
                     }
                 }
 
-                // AIRI-style emotion badge: pops next to the AI avatar when ACT tokens play
-                Rectangle {
-                    id: emotionBadge
-                    width: 26; height: 26
-                    radius: 13
-                    color: Theme.surface
-                    border.color: Theme.glassBorder
-                    border.width: 1
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.topMargin: -8
-                    anchors.leftMargin: 30
-                    visible: emotionEmoji.length > 0
-                    opacity: 0
-                    scale: 0.4
-                    Text {
-                        id: emotionText
-                        anchors.centerIn: parent
-                        text: emotionEmoji
-                        font.pixelSize: 14
-                    }
-                    ParallelAnimation {
-                        id: emotionPop
-                        NumberAnimation { target: emotionBadge; property: "opacity"; from: 0; to: 1; duration: 180; easing.type: Easing.OutBack }
-                        NumberAnimation { target: emotionBadge; property: "scale"; from: 0.4; to: 1.0; duration: 220; easing.type: Easing.OutBack }
-                    }
-                    SequentialAnimation {
-                        id: emotionFade
-                        PauseAnimation { duration: 2400 }
-                        ParallelAnimation {
-                            NumberAnimation { target: emotionBadge; property: "opacity"; to: 0; duration: 300; easing.type: Easing.InCubic }
-                            NumberAnimation { target: emotionBadge; property: "scale"; to: 0.6; duration: 300; easing.type: Easing.InCubic }
-                        }
-                    }
-                }
-
                 Column {
                     Layout.fillWidth: true
                     spacing: 0
@@ -167,6 +131,43 @@ Rectangle {
                         color: Theme.ok
                         font.pixelSize: 11
                         verticalAlignment: Text.AlignVCenter
+                    }
+                }
+            }
+
+            // AIRI-style emotion badge: overlays the header (not a layout item,
+            // so it never pushes the name/status around when it appears)
+            Rectangle {
+                id: emotionBadge
+                width: 26; height: 26
+                radius: 13
+                color: Theme.surface
+                border.color: Theme.glassBorder
+                border.width: 1
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.topMargin: 3
+                anchors.leftMargin: 36
+                visible: emotionEmoji.length > 0
+                opacity: 0
+                scale: 0.4
+                Text {
+                    id: emotionText
+                    anchors.centerIn: parent
+                    text: emotionEmoji
+                    font.pixelSize: 14
+                }
+                ParallelAnimation {
+                    id: emotionPop
+                    NumberAnimation { target: emotionBadge; property: "opacity"; from: 0; to: 1; duration: 180; easing.type: Easing.OutBack }
+                    NumberAnimation { target: emotionBadge; property: "scale"; from: 0.4; to: 1.0; duration: 220; easing.type: Easing.OutBack }
+                }
+                SequentialAnimation {
+                    id: emotionFade
+                    PauseAnimation { duration: 2400 }
+                    ParallelAnimation {
+                        NumberAnimation { target: emotionBadge; property: "opacity"; to: 0; duration: 300; easing.type: Easing.InCubic }
+                        NumberAnimation { target: emotionBadge; property: "scale"; to: 0.6; duration: 300; easing.type: Easing.InCubic }
                     }
                 }
             }
