@@ -36,7 +36,7 @@ public:
     // helpers for AiService (per-contact dirs)
     QString contactDir(const QString &id) const;
     QString contactMemoryPath(const QString &id) const;
-    QString contactAvatarPath(const QString &id) const;
+    Q_INVOKABLE QString contactAvatarPath(const QString &id) const;
 
     // ensure a default contact exists (first run)
     void ensureDefault();
