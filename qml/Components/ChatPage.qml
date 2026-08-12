@@ -71,14 +71,15 @@ Rectangle {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                spacing: 10
+                anchors.leftMargin: 8
+                anchors.rightMargin: 10
+                spacing: 8
 
                 AppButton {
                     text: "‹"
-                    implicitWidth: 36
-                    implicitHeight: 36
-                    font.pixelSize: 20
+                    implicitWidth: 32
+                    implicitHeight: 32
+                    font.pixelSize: 18
                     glassColor: Theme.glass
                     glassHover: Theme.glassHover
                     glassPress: Theme.glassPress
@@ -152,17 +153,20 @@ Rectangle {
 
                 Column {
                     Layout.fillWidth: true
-                    spacing: 1
+                    spacing: 0
                     Text {
                         text: aiService.aiName()
                         color: Theme.text
                         font.pixelSize: 15
                         font.bold: true
+                        verticalAlignment: Text.AlignVCenter
                     }
                     Text {
+                        id: headerStatus
                         text: "在线"
                         color: Theme.ok
                         font.pixelSize: 11
+                        verticalAlignment: Text.AlignVCenter
                     }
                 }
             }
@@ -276,23 +280,50 @@ Rectangle {
         // placeholder AI bubble with typing indicator, replaced in-place by the reply (TG style)
         msgModel.append({ "isAi": true, "msg": "..." })
         msgView.positionViewAtEnd()
-        appCore.setStatus(aiService.aiName() + " 正在输入...")
+        setHeaderStatus(aiService.aiName() + " 正在输入...")
         aiService.sendMessage(t)
     }
 
+    function setHeaderStatus(s) {
+        headerStatus.text = s
+        headerStatus.color = s === "在线" ? Theme.ok : Theme.warn
+    }
+
+    // human-like typing: reveal the reply character by character
     function appendAi(text) {
-        // replace the placeholder bubble's content in place (no flicker, TG style)
-        if (msgModel.count > 0) {
-            var last = msgModel.get(msgModel.count-1)
-            if (last.isAi)
-                msgModel.set(msgModel.count-1, { "isAi": true, "msg": text })
-            else
-                msgModel.append({ "isAi": true, "msg": text })
-        } else {
-            msgModel.append({ "isAi": true, "msg": text })
+        typeTimer.stop()
+        typingText = text
+        typingPos = 0
+        // ensure placeholder bubble exists
+        if (msgModel.count === 0 || !msgModel.get(msgModel.count-1).isAi) {
+            msgModel.append({ "isAi": true, "msg": "" })
         }
-        msgView.positionViewAtEnd()
-        appCore.setStatus("在线")
+        setHeaderStatus(aiService.aiName() + " 正在输入...")
+        typeTimer.start()
+    }
+
+    property string typingText: ""
+    property int typingPos: 0
+
+    Timer {
+        id: typeTimer
+        interval: 28
+        repeat: true
+        onTriggered: {
+            var step = 3 // characters per tick (fast but human-like)
+            typingPos = Math.min(typingPos + step, typingText.length)
+            if (msgModel.count > 0) {
+                var last = msgModel.get(msgModel.count-1)
+                if (last.isAi) {
+                    msgModel.set(msgModel.count-1, { "isAi": true, "msg": typingText.substring(0, typingPos) })
+                }
+            }
+            msgView.positionViewAtEnd()
+            if (typingPos >= typingText.length) {
+                typeTimer.stop()
+                setHeaderStatus("在线")
+            }
+        }
     }
 
     // exposed: AI avatar image path (empty = char avatar)
