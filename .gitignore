@@ -5,3 +5,9 @@ dist/
 *.exe
 *.7z
 *.lnk
+install-test/
+install-test2/
+zip-test/
+zip-install/
+installer/
+ChineseSimplified.isl
