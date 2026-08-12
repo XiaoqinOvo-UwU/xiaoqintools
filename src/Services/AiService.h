@@ -25,12 +25,16 @@ public:
     // user profile passthrough (stored in config)
     Q_INVOKABLE QString userName();
     Q_INVOKABLE QString avatarChar();
-    Q_INVOKABLE QString aiName();
-    Q_INVOKABLE QString aiPersonality();
     Q_INVOKABLE void setUserName(const QString &v);
     Q_INVOKABLE void setAvatarChar(const QString &v);
+
+    // current contact (AI) profile — delegated to ContactService
+    Q_INVOKABLE QString aiName();
+    Q_INVOKABLE QString aiPersonality();
     Q_INVOKABLE void setAiName(const QString &v);
     Q_INVOKABLE void setAiPersonality(const QString &v);
+    Q_INVOKABLE QString setAiAvatar(const QString &srcPath);
+    Q_INVOKABLE QString aiAvatarPath();
 
     // AI API config passthrough
     Q_INVOKABLE QString apiBaseUrl();
@@ -42,9 +46,7 @@ public:
 
     // avatar images: copy a local image into app data, return stored path
     Q_INVOKABLE QString setUserAvatar(const QString &srcPath);
-    Q_INVOKABLE QString setAiAvatar(const QString &srcPath);
     Q_INVOKABLE QString userAvatarPath();
-    Q_INVOKABLE QString aiAvatarPath();
 
     // lifecycle: call on app start / exit to record sessions
     Q_INVOKABLE void recordSessionStart();

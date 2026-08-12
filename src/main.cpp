@@ -18,6 +18,7 @@
 #include "Services/PluginManager.h"
 #include "Services/AiService.h"
 #include "Services/StatsService.h"
+#include "Services/ContactService.h"
 
 int main(int argc, char *argv[])
 {
@@ -44,6 +45,7 @@ int main(int argc, char *argv[])
     qmlRegisterType<PluginManager>("XiaoQin.Services", 1, 0, "PluginManager");
     qmlRegisterType<AiService>("XiaoQin.Services", 1, 0, "AiService");
     qmlRegisterType<StatsService>("XiaoQin.Services", 1, 0, "StatsService");
+    qmlRegisterType<ContactService>("XiaoQin.Services", 1, 0, "ContactService");
 
     QQmlApplicationEngine engine;
     // Make QML modules resolvable next to the executable (deployed Qt plugins).
@@ -62,6 +64,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("aiService", aiSvc);
     aiSvc->recordSessionStart();
     engine.rootContext()->setContextProperty("statsService", new StatsService(&engine));
+    engine.rootContext()->setContextProperty("contactService", &ContactService::instance());
 
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed,

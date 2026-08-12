@@ -132,40 +132,9 @@ Page {
                         background: Rectangle { color: Theme.inputBg; radius: 8 }
                     }
 
-                    // ---- 人设更改 ----
-                    Text { text: "AI 名字"; color: Theme.textDim; font.pixelSize: 12 }
-                    TextField {
-                        id: editAiName
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 36
-                        color: "white"
-                        placeholderText: "AI"
-                        placeholderTextColor: Theme.textDim
-                        text: aiService.aiName()
-                        background: Rectangle { color: Theme.inputBg; radius: 8 }
-                    }
-                    Text { text: "AI 人设（性格、说话风格）"; color: Theme.textDim; font.pixelSize: 12 }
-                    TextArea {
-                        id: editAiPersonality
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 72
-                        color: "white"
-                        placeholderText: "温柔、成熟、略带忧郁"
-                        placeholderTextColor: Theme.textDim
-                        text: aiService.aiPersonality()
-                        wrapMode: TextEdit.Wrap
-                        background: Rectangle { color: Theme.inputBg; radius: 8 }
-                    }
-
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
-                        AppButton {
-                            text: "🖼 上传 AI 头像"
-                            Layout.fillWidth: true
-                            implicitHeight: 36
-                            onClicked: aiAvatarFileDialog.open()
-                        }
                         AppButton {
                             text: "保存 AI 配置"
                             Layout.fillWidth: true
@@ -174,57 +143,20 @@ Page {
                                 aiService.setApiBaseUrl(editBaseUrl.text.trim())
                                 aiService.setApiModel(editModel.text.trim())
                                 aiService.setApiKey(editApiKey.text.trim())
-                                aiService.setAiName(editAiName.text.trim())
-                                aiService.setAiPersonality(editAiPersonality.text.trim())
                                 root.note = "AI 配置已保存~"
                                 appCore.showToast("AI 配置已保存~")
                             }
                         }
                     }
 
-                    // ---- 记忆查看 ----
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 1
-                        color: Qt.rgba(255,255,255,0.08)
-                    }
-                    Text { text: "AI 记忆"; color: "white"; font.pixelSize: 14; font.bold: true }
+                    // AI name / persona / avatar / memory moved to the chat page:
+                    // click the AI avatar in the chat window to manage them.
                     Text {
                         Layout.fillWidth: true
-                        text: aiService.memoryDetail().length > 20 ? "已有记忆数据，点「查看记忆」浏览；聊天时 AI 也会参考这些记忆" : "暂无记忆，多用一用 AI 会慢慢记住你"
+                        text: "AI 的名字、人设、头像和记忆：打开聊天后点击左上角 AI 头像即可设置（侧栏「新增联系人」可创建更多 AI）"
                         color: Theme.textDim
                         font.pixelSize: 11
                         wrapMode: Text.Wrap
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 10
-                        AppButton {
-                            text: "📖 查看记忆"
-                            Layout.fillWidth: true
-                            implicitHeight: 36
-                            onClicked: memoryDialog.open()
-                        }
-                        AppButton {
-                            text: "➕ 添加记忆"
-                            Layout.fillWidth: true
-                            implicitHeight: 36
-                            onClicked: {
-                                memoryInput.text = ""
-                                memoryInputDialog.open()
-                            }
-                        }
-                        AppButton {
-                            text: "🗑 清空记忆"
-                            Layout.fillWidth: true
-                            implicitHeight: 36
-                            glassColor: Qt.rgba(0.77,0.35,0.35,0.35)
-                            onClicked: {
-                                aiService.clearMemory()
-                                root.note = "记忆已清空~"
-                                appCore.showToast("记忆已清空~")
-                            }
-                        }
                     }
                 }
             }
@@ -372,138 +304,9 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小钦的工具 v3.0.2 · 泉此方天下第一"
+                text: "小钦的工具 v3.1.0 · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
-            }
-        }
-    }
-
-    // ---- memory viewer dialog ----
-    Dialog {
-        id: memoryDialog
-        width: 460
-        height: 420
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle {
-            color: Theme.surface
-            radius: 14
-            border.color: Theme.glassBorder
-            border.width: 1
-        }
-        header: Item {
-            height: 40
-            Text {
-                anchors.centerIn: parent
-                text: "AI 的记忆"
-                color: Theme.text
-                font.pixelSize: 16
-                font.bold: true
-            }
-            AppButton {
-                anchors.right: parent.right
-                anchors.rightMargin: 6
-                anchors.verticalCenter: parent.verticalCenter
-                text: "✕"
-                implicitWidth: 30
-                implicitHeight: 30
-                btnRadius: 15
-                onClicked: memoryDialog.close()
-            }
-        }
-        contentItem: ScrollView {
-            clip: true
-            ScrollBar.vertical.policy: ScrollBar.AsNeeded
-            TextArea {
-                readOnly: true
-                color: Theme.text
-                font.pixelSize: 13
-                wrapMode: TextEdit.Wrap
-                text: aiService.memoryDetail()
-                background: null
-            }
-        }
-    }
-
-    // ---- add memory note dialog ----
-    Dialog {
-        id: memoryInputDialog
-        width: 420
-        height: 220
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle {
-            color: Theme.surface
-            radius: 14
-            border.color: Theme.glassBorder
-            border.width: 1
-        }
-        header: Item {
-            height: 40
-            Text {
-                anchors.centerIn: parent
-                text: "添加记忆"
-                color: Theme.text
-                font.pixelSize: 16
-                font.bold: true
-            }
-        }
-        contentItem: ColumnLayout {
-            spacing: 10
-            Text {
-                text: "告诉 AI 一件值得记住的事（比如你的喜好、习惯）"
-                color: Theme.textDim
-                font.pixelSize: 12
-                wrapMode: Text.Wrap
-                Layout.fillWidth: true
-            }
-            TextArea {
-                id: memoryInput
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                color: Theme.text
-                placeholderText: "比如：我喜欢喝奶茶，讨厌下雨天..."
-                placeholderTextColor: Theme.textDim
-                wrapMode: TextEdit.Wrap
-                background: Rectangle { color: Theme.inputBg; radius: 8 }
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-                AppButton {
-                    text: "记住"
-                    Layout.fillWidth: true
-                    onClicked: {
-                        aiService.addMemoryNote(memoryInput.text)
-                        root.note = "记住了~"
-                        appCore.showToast("记住了~")
-                        memoryInputDialog.close()
-                    }
-                }
-                AppButton {
-                    text: "取消"
-                    Layout.fillWidth: true
-                    onClicked: memoryInputDialog.close()
-                }
-            }
-        }
-    }
-
-    // ---- AI avatar upload ----
-    FileDialog {
-        id: aiAvatarFileDialog
-        title: "选择 AI 头像"
-        nameFilters: ["图片文件 (*.png *.jpg *.jpeg *.bmp *.gif)", "所有文件 (*.*)"]
-        onAccepted: {
-            var url = aiAvatarFileDialog.selectedFile.toString()
-            var p = url.replace("file:///", "").replace("file://", "")
-            if (p.length > 0) {
-                aiService.setAiAvatar(p)
-                root.note = "AI 头像已更新~"
-                appCore.showToast("AI 头像已更新~")
             }
         }
     }

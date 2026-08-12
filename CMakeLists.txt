@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(XiaoQinTools VERSION 3.0.2 LANGUAGES CXX)
+project(XiaoQinTools VERSION 3.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,6 +38,8 @@ set(APP_SOURCES
     src/Services/AiService.cpp
     src/Services/StatsService.h
     src/Services/StatsService.cpp
+    src/Services/ContactService.h
+    src/Services/ContactService.cpp
 )
 
 qt_add_executable(XiaoQinTools WIN32

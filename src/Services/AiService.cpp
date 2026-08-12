@@ -1,5 +1,6 @@
 #include "AiService.h"
 #include "ConfigService.h"
+#include "ContactService.h"
 
 #include <QDir>
 #include <QFile>
@@ -29,25 +30,27 @@ AiService::AiService(QObject *parent)
 
 QString AiService::memoryPath() const
 {
-    // memory lives in %APPDATA% so it survives deleting the tool directory
-    return ConfigService::instance().configDir() + "/ai_memory.json";
+    // per-contact memory lives in %APPDATA% so it survives deleting the tool directory
+    return ContactService::instance().contactMemoryPath(ContactService::instance().currentId());
 }
 
 void AiService::ensureMemory()
 {
-    QDir().mkpath(ConfigService::instance().configDir());
+    QDir().mkpath(ContactService::instance().contactDir(ContactService::instance().currentId()));
 
-    // migrate legacy memory files if present
-    const QStringList legacy = {
-        "C:/XiaoQinData/用户工具/ai_memory.json",
-        "C:/deepseek杂货铺/小钦工具/ai_memory.json",
-        "C:/XiaoQinData/tools-data/ai_memory.json",
-    };
-    if (!QFile::exists(memoryPath())) {
-        for (const QString &old : legacy) {
-            if (QFile::exists(old)) {
-                QFile::copy(old, memoryPath());
-                break;
+    // migrate legacy memory files if present (first-run only, default contact)
+    if (ContactService::instance().currentId().isEmpty()) {
+        const QStringList legacy = {
+            "C:/XiaoQinData/用户工具/ai_memory.json",
+            "C:/deepseek杂货铺/小钦工具/ai_memory.json",
+            "C:/XiaoQinData/tools-data/ai_memory.json",
+        };
+        if (!QFile::exists(memoryPath())) {
+            for (const QString &old : legacy) {
+                if (QFile::exists(old)) {
+                    QFile::copy(old, memoryPath());
+                    break;
+                }
             }
         }
     }
@@ -316,8 +319,8 @@ void AiService::idleChat()
 {
     QString mem = readMemory();
     QString user = ConfigService::instance().userName();
-    QString ai = ConfigService::instance().aiName();
-    QString personality = ConfigService::instance().aiPersonality();
+    QString ai = ContactService::instance().currentName();
+    QString personality = ContactService::instance().currentPersonality();
     QString prompt = "你是" + ai + "，性格" + personality + "。用户" + user + "已经有一会儿没操作电脑了。"
                      "请自然地主动找个话题和ta聊一句（关心、分享、或随便聊聊），像朋友一样，简短一句话，不要生硬。"
                      "你可以参考记忆：\n" + mem + "\n只输出这句话本身。";
@@ -344,12 +347,21 @@ void AiService::idleChat()
 // ---- user profile passthrough ----
 QString AiService::userName() { return ConfigService::instance().userName(); }
 QString AiService::avatarChar() { return ConfigService::instance().avatarChar(); }
-QString AiService::aiName() { return ConfigService::instance().aiName(); }
-QString AiService::aiPersonality() { return ConfigService::instance().aiPersonality(); }
 void AiService::setUserName(const QString &v) { ConfigService::instance().setUserName(v); emit profileChanged(); }
 void AiService::setAvatarChar(const QString &v) { ConfigService::instance().setAvatarChar(v); emit profileChanged(); }
-void AiService::setAiName(const QString &v) { ConfigService::instance().setAiName(v); emit profileChanged(); }
-void AiService::setAiPersonality(const QString &v) { ConfigService::instance().setAiPersonality(v); emit profileChanged(); }
+
+// current contact (AI) profile — delegated to ContactService
+QString AiService::aiName() { return ContactService::instance().currentName(); }
+QString AiService::aiPersonality() { return ContactService::instance().currentPersonality(); }
+void AiService::setAiName(const QString &v) { ContactService::instance().setCurrentName(v); emit profileChanged(); }
+void AiService::setAiPersonality(const QString &v) { ContactService::instance().setCurrentPersonality(v); emit profileChanged(); }
+QString AiService::setAiAvatar(const QString &srcPath)
+{
+    QString p = ContactService::instance().setCurrentAvatar(srcPath);
+    if (!p.isEmpty()) emit profileChanged();
+    return p;
+}
+QString AiService::aiAvatarPath() { return ContactService::instance().currentAvatarPath(); }
 
 QString AiService::apiBaseUrl() { return ConfigService::instance().baseUrl(); }
 QString AiService::apiModel() { return ConfigService::instance().model(); }
@@ -396,19 +408,9 @@ QString AiService::setUserAvatar(const QString &srcPath)
     if (!p.isEmpty()) ConfigService::instance().setAvatarChar(""); // use image over char
     return p;
 }
-QString AiService::setAiAvatar(const QString &srcPath)
-{
-    QString p = copyAvatar(srcPath, "ai_avatar.png");
-    return p;
-}
 QString AiService::userAvatarPath()
 {
     QString p = ConfigService::instance().configDir() + "/user_avatar.png";
-    return QFile::exists(p) ? p : QString();
-}
-QString AiService::aiAvatarPath()
-{
-    QString p = ConfigService::instance().configDir() + "/ai_avatar.png";
     return QFile::exists(p) ? p : QString();
 }
 
@@ -418,8 +420,8 @@ void AiService::generateGreeting()
     QString mem = readMemory();
     QString up = uptimeText();
     QString user = ConfigService::instance().userName();
-    QString ai = ConfigService::instance().aiName();
-    QString personality = ConfigService::instance().aiPersonality();
+    QString ai = ContactService::instance().currentName();
+    QString personality = ContactService::instance().currentPersonality();
     int hour = QTime::currentTime().hour();
     QString period = hour < 11 ? "早上" : hour < 14 ? "中午" : hour < 18 ? "下午" : hour < 23 ? "晚上" : "深夜";
 
@@ -537,8 +539,8 @@ void AiService::sendMessage(const QString &text)
 {
     QString mem = readMemory();
     QString user = ConfigService::instance().userName();
-    QString ai = ConfigService::instance().aiName();
-    QString personality = ConfigService::instance().aiPersonality();
+    QString ai = ContactService::instance().currentName();
+    QString personality = ContactService::instance().currentPersonality();
     int hour = QTime::currentTime().hour();
     QString period = hour < 11 ? "早上" : hour < 14 ? "中午" : hour < 18 ? "下午" : hour < 23 ? "晚上" : "深夜";
 

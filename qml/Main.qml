@@ -34,13 +34,26 @@ ApplicationWindow {
     property int currentPage: 0
     property string aiGreeting: "你好。"
 
+    // contact list model (id|name|hasAvatar)
+    ListModel { id: contactModel }
+
+    function refreshContacts() {
+        contactModel.clear()
+        var list = contactService.contactList()
+        for (var i = 0; i < list.length; i++) {
+            var parts = list[i].split("|")
+            if (parts.length >= 3)
+                contactModel.append({ "cid": parts[0], "cname": parts[1], "hasAvatar": parts[2] })
+        }
+    }
+
     // refresh profile labels after edit
     function refreshProfile() {
         userAvatarText.text = aiService.avatarChar()
         userNameText.text = aiService.userName()
-        aiCardName.text = aiService.aiName()
         root.aiAvatarPath = toFileUrl(aiService.aiAvatarPath())
         root.userAvatarPath = toFileUrl(aiService.userAvatarPath())
+        refreshContacts()
     }
 
     // convert a local path to a file:// URL usable by Image.source
@@ -178,62 +191,124 @@ ApplicationWindow {
                     Layout.rightMargin: 14
                 }
 
-                // ================= AI chat card (click -> full-screen ChatPage) =================
+                // ================= AI CONTACTS =================
+                // round "add contact" button — distinct from the flat nav tabs below
                 Rectangle {
-                    id: aiChatCard
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 70
+                    Layout.preferredHeight: 52
                     color: "transparent"
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
-                        onEntered: aiChatCard.color = Theme.hoverBg
-                        onExited: aiChatCard.color = "transparent"
-                        onClicked: root.chatOpen = true
+                        onEntered: addContactBtn.color = Theme.hoverBg
+                        onExited: addContactBtn.color = "transparent"
+                        onClicked: addContactDialog.open()
                     }
                     RowLayout {
+                        id: addContactBtn
                         anchors.fill: parent
-                        anchors.margins: 14
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
                         spacing: 10
                         Rectangle {
                             width: 40; height: 40
                             radius: 20
-                            color: Theme.accent
-                            clip: true
-                            Image {
-                                anchors.fill: parent
-                                visible: root.aiAvatarPath.length > 0
-                                source: root.aiAvatarPath
-                                fillMode: Image.PreserveAspectCrop
-                            }
+                            color: Qt.rgba(0.35,0.45,0.6,0.9)
+                            border.color: Qt.rgba(0.5,0.6,0.8,0.5)
+                            border.width: 1
                             Text {
                                 anchors.centerIn: parent
-                                text: root.aiAvatarPath.length > 0 ? "" : (aiService.aiName().length > 0 ? aiService.aiName().charAt(0) : "A")
+                                text: "＋"
                                 color: "white"
-                                font.pixelSize: 16
+                                font.pixelSize: 20
                                 font.bold: true
                             }
                         }
                         Column {
                             Layout.fillWidth: true
-                            spacing: 2
+                            spacing: 1
                             Text {
-                                id: aiCardName
-                                text: aiService.aiName()
+                                text: "新增联系人"
                                 color: Theme.text
-                                font.pixelSize: 14
+                                font.pixelSize: 13
                                 font.bold: true
                             }
                             Text {
-                                text: "点击进入聊天"
+                                text: "添加一个新的 AI"
                                 color: Theme.textDim
-                                font.pixelSize: 11
+                                font.pixelSize: 10
                             }
                         }
-                        Text {
-                            text: "›"
-                            color: Theme.textDim
-                            font.pixelSize: 18
+                    }
+                }
+
+                // contact list
+                Repeater {
+                    model: contactModel
+                    delegate: Rectangle {
+                        id: contactItem
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 58
+                        color: cid === contactService.currentId() ? Theme.selected
+                             : cHover ? Theme.hoverBg : "transparent"
+                        property bool cHover: false
+                        Behavior on color { ColorAnimation { duration: 140 } }
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: contactItem.cHover = true
+                            onExited: contactItem.cHover = false
+                            onClicked: {
+                                contactService.setCurrent(cid)
+                                root.refreshProfile()
+                                root.chatOpen = true
+                            }
+                        }
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 12
+                            spacing: 10
+                            Rectangle {
+                                width: 36; height: 36
+                                radius: 18
+                                color: Theme.accent
+                                clip: true
+                                Image {
+                                    anchors.fill: parent
+                                    visible: hasAvatar === "1"
+                                    source: "file:///" + contactService.contactAvatarPath(cid).replace(/\\/g, "/")
+                                    fillMode: Image.PreserveAspectCrop
+                                }
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: hasAvatar !== "1"
+                                    text: cname.length > 0 ? cname.charAt(0) : "A"
+                                    color: "white"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+                            }
+                            Column {
+                                Layout.fillWidth: true
+                                spacing: 1
+                                Text {
+                                    text: cname
+                                    color: Theme.text
+                                    font.pixelSize: 13
+                                    font.bold: cid === contactService.currentId()
+                                }
+                                Text {
+                                    text: "点击开始聊天"
+                                    color: Theme.textDim
+                                    font.pixelSize: 10
+                                }
+                            }
+                            Text {
+                                text: "›"
+                                color: Theme.textDim
+                                font.pixelSize: 15
+                            }
                         }
                     }
                 }
@@ -317,7 +392,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.0.2"
+                        text: "小钦的工具 v3.1.0"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -369,6 +444,7 @@ ApplicationWindow {
                 aiAvatarSource: root.aiAvatarPath
                 onBackRequested: chatPage.closeWithAnim()
                 onCloseFinished: root.chatOpen = false
+                onAiProfileRequested: aiProfileDialog.open()
             }
         }
     }
@@ -461,6 +537,339 @@ ApplicationWindow {
         }
     }
 
+    // ================= ADD CONTACT DIALOG =================
+    Dialog {
+        id: addContactDialog
+        width: 360
+        height: 300
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle {
+            color: Theme.surface
+            radius: 14
+            border.color: Theme.glassBorder
+            border.width: 1
+        }
+        header: Item {
+            height: 40
+            Text {
+                anchors.centerIn: parent
+                text: "新增 AI 联系人"
+                color: Theme.text
+                font.pixelSize: 16
+                font.bold: true
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 12
+            Text { text: "AI 名字"; color: Theme.textDim; font.pixelSize: 12 }
+            TextField {
+                id: newContactName
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                color: Theme.text
+                placeholderText: "例如：白栀"
+                placeholderTextColor: Theme.textDim
+                background: Rectangle { color: Theme.inputBg; radius: 8 }
+            }
+            Text { text: "AI 人设（性格、说话风格）"; color: Theme.textDim; font.pixelSize: 12 }
+            TextArea {
+                id: newContactPersonality
+                Layout.fillWidth: true
+                Layout.preferredHeight: 80
+                color: Theme.text
+                placeholderText: "温柔、成熟、略带忧郁..."
+                placeholderTextColor: Theme.textDim
+                wrapMode: TextEdit.Wrap
+                background: Rectangle { color: Theme.inputBg; radius: 8 }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                AppButton {
+                    text: "创建"
+                    Layout.fillWidth: true
+                    onClicked: {
+                        var id = contactService.addContact(newContactName.text, newContactPersonality.text)
+                        root.refreshContacts()
+                        addContactDialog.close()
+                        newContactName.text = ""
+                        newContactPersonality.text = ""
+                        root.chatOpen = true
+                        islandToast.show("联系人已创建~")
+                    }
+                }
+                AppButton {
+                    text: "取消"
+                    Layout.fillWidth: true
+                    onClicked: addContactDialog.close()
+                }
+            }
+        }
+    }
+
+    // ================= AI PROFILE DIALOG (click AI avatar in chat) =================
+    Dialog {
+        id: aiProfileDialog
+        width: 420
+        height: 480
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle {
+            color: Theme.surface
+            radius: 14
+            border.color: Theme.glassBorder
+            border.width: 1
+        }
+        header: Item {
+            height: 44
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 14
+                anchors.rightMargin: 8
+                spacing: 10
+                Rectangle {
+                    width: 34; height: 34
+                    radius: 17
+                    color: Theme.accent
+                    clip: true
+                    Image {
+                        anchors.fill: parent
+                        visible: root.aiAvatarPath.length > 0
+                        source: root.aiAvatarPath
+                        fillMode: Image.PreserveAspectCrop
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        visible: root.aiAvatarPath.length === 0
+                        text: aiService.aiName().length > 0 ? aiService.aiName().charAt(0) : "A"
+                        color: "white"
+                        font.pixelSize: 15
+                        font.bold: true
+                    }
+                }
+                Text {
+                    text: "AI 资料"
+                    color: Theme.text
+                    font.pixelSize: 16
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+                AppButton {
+                    text: "✕"
+                    implicitWidth: 30
+                    implicitHeight: 30
+                    btnRadius: 15
+                    onClicked: aiProfileDialog.close()
+                }
+            }
+        }
+        contentItem: ScrollView {
+            clip: true
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            ColumnLayout {
+                width: aiProfileDialog.width - 36
+                spacing: 10
+
+                Text { text: "AI 名字"; color: Theme.textDim; font.pixelSize: 12 }
+                TextField {
+                    id: profileAiName
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
+                    color: Theme.text
+                    text: aiService.aiName()
+                    background: Rectangle { color: Theme.inputBg; radius: 8 }
+                }
+                Text { text: "AI 人设"; color: Theme.textDim; font.pixelSize: 12 }
+                TextArea {
+                    id: profileAiPersonality
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 70
+                    color: Theme.text
+                    text: aiService.aiPersonality()
+                    wrapMode: TextEdit.Wrap
+                    background: Rectangle { color: Theme.inputBg; radius: 8 }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    AppButton {
+                        text: "🖼 上传头像"
+                        Layout.fillWidth: true
+                        implicitHeight: 34
+                        onClicked: {
+                            fileDialog.avatarTarget = "ai"
+                            fileDialog.open()
+                        }
+                    }
+                    AppButton {
+                        text: "保存资料"
+                        Layout.fillWidth: true
+                        implicitHeight: 34
+                        onClicked: {
+                            aiService.setAiName(profileAiName.text)
+                            aiService.setAiPersonality(profileAiPersonality.text)
+                            root.refreshProfile()
+                            islandToast.show("AI 资料已保存~")
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Qt.rgba(255,255,255,0.08)
+                }
+
+                Text { text: "AI 记忆"; color: Theme.text; font.pixelSize: 14; font.bold: true }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    AppButton {
+                        text: "📖 查看记忆"
+                        Layout.fillWidth: true
+                        implicitHeight: 34
+                        onClicked: memoryDialog.open()
+                    }
+                    AppButton {
+                        text: "➕ 添加记忆"
+                        Layout.fillWidth: true
+                        implicitHeight: 34
+                        onClicked: {
+                            memoryInput.text = ""
+                            memoryInputDialog.open()
+                        }
+                    }
+                    AppButton {
+                        text: "🗑 清空"
+                        Layout.fillWidth: true
+                        implicitHeight: 34
+                        glassColor: Qt.rgba(0.77,0.35,0.35,0.35)
+                        onClicked: {
+                            aiService.clearMemory()
+                            islandToast.show("记忆已清空~")
+                        }
+                    }
+                }
+
+                Item { Layout.preferredHeight: 10 }
+            }
+        }
+    }
+
+    // ================= MEMORY DIALOGS =================
+    Dialog {
+        id: memoryDialog
+        width: 460
+        height: 420
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle {
+            color: Theme.surface
+            radius: 14
+            border.color: Theme.glassBorder
+            border.width: 1
+        }
+        header: Item {
+            height: 40
+            Text {
+                anchors.centerIn: parent
+                text: "AI 的记忆"
+                color: Theme.text
+                font.pixelSize: 16
+                font.bold: true
+            }
+            AppButton {
+                anchors.right: parent.right
+                anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✕"
+                implicitWidth: 30
+                implicitHeight: 30
+                btnRadius: 15
+                onClicked: memoryDialog.close()
+            }
+        }
+        contentItem: ScrollView {
+            clip: true
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            TextArea {
+                readOnly: true
+                color: Theme.text
+                font.pixelSize: 13
+                wrapMode: TextEdit.Wrap
+                text: aiService.memoryDetail()
+                background: null
+            }
+        }
+    }
+
+    Dialog {
+        id: memoryInputDialog
+        width: 420
+        height: 220
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle {
+            color: Theme.surface
+            radius: 14
+            border.color: Theme.glassBorder
+            border.width: 1
+        }
+        header: Item {
+            height: 40
+            Text {
+                anchors.centerIn: parent
+                text: "添加记忆"
+                color: Theme.text
+                font.pixelSize: 16
+                font.bold: true
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 10
+            Text {
+                text: "告诉 AI 一件值得记住的事（比如你的喜好、习惯）"
+                color: Theme.textDim
+                font.pixelSize: 12
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+            TextArea {
+                id: memoryInput
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: Theme.text
+                placeholderText: "比如：我喜欢喝奶茶，讨厌下雨天..."
+                placeholderTextColor: Theme.textDim
+                wrapMode: TextEdit.Wrap
+                background: Rectangle { color: Theme.inputBg; radius: 8 }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                AppButton {
+                    text: "记住"
+                    Layout.fillWidth: true
+                    onClicked: {
+                        aiService.addMemoryNote(memoryInput.text)
+                        islandToast.show("记住了~")
+                        memoryInputDialog.close()
+                    }
+                }
+                AppButton {
+                    text: "取消"
+                    Layout.fillWidth: true
+                    onClicked: memoryInputDialog.close()
+                }
+            }
+        }
+    }
+
     // ================= ISLAND TOAST =================
     IslandToast {
         id: islandToast
@@ -479,6 +888,7 @@ ApplicationWindow {
 
     // chat page open state
     property bool chatOpen: false
+    property bool appReady: false
 
     // avatar image paths (empty = char avatar), stored as file:// URLs
     property string aiAvatarPath: ""
@@ -507,9 +917,11 @@ ApplicationWindow {
 
     // startup: greeting shown once via island toast for 20s; AI knows what was said
     Component.onCompleted: {
+        root.appReady = true
         // load avatars (files may appear after first upload)
         root.aiAvatarPath = toFileUrl(aiService.aiAvatarPath())
         root.userAvatarPath = toFileUrl(aiService.userAvatarPath())
+        root.refreshContacts()
         root.aiGreeting = aiService.greeting()
         if (aiService.shouldGreetToday()) {
             islandToast.show(root.aiGreeting, 20000)
@@ -530,6 +942,16 @@ ApplicationWindow {
         }
         function onProfileChanged() {
             root.refreshProfile()
+        }
+    }
+
+    Connections {
+        target: contactService
+        function onContactsChanged() {
+            if (root.appReady) {
+                root.refreshContacts()
+                root.refreshProfile()
+            }
         }
     }
 

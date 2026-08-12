@@ -42,6 +42,7 @@ Rectangle {
 
     signal backRequested()
     signal closeFinished()
+    signal aiProfileRequested()
 
     ColumnLayout {
         anchors.fill: parent
@@ -71,12 +72,14 @@ Rectangle {
                     onClicked: chatPage.backRequested()
                 }
 
-                // AI avatar (image or char)
+                // AI avatar (image or char) — click opens the AI profile dialog
                 Rectangle {
                     width: 40; height: 40
                     radius: 20
                     color: Theme.accent
                     clip: true
+                    scale: aiAvatarBtn.pressed ? 0.92 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                     Image {
                         anchors.fill: parent
                         visible: chatPage.aiAvatarSource.length > 0
@@ -89,6 +92,12 @@ Rectangle {
                         color: "white"
                         font.pixelSize: 16
                         font.bold: true
+                    }
+                    MouseArea {
+                        id: aiAvatarBtn
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: chatPage.aiProfileRequested()
                     }
                 }
 
