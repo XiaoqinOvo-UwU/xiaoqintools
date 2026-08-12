@@ -135,19 +135,19 @@ Rectangle {
                 }
             }
 
-            // AIRI-style emotion badge: overlays the header (not a layout item,
-            // so it never pushes the name/status around when it appears)
+            // AIRI-style emotion badge: pops over the AI avatar (overlay, never
+            // touches the name/status area)
             Rectangle {
                 id: emotionBadge
-                width: 26; height: 26
-                radius: 13
+                width: 24; height: 24
+                radius: 12
                 color: Theme.surface
                 border.color: Theme.glassBorder
                 border.width: 1
                 anchors.left: parent.left
                 anchors.top: parent.top
-                anchors.topMargin: 3
-                anchors.leftMargin: 36
+                anchors.topMargin: 4
+                anchors.leftMargin: 56
                 visible: emotionEmoji.length > 0
                 opacity: 0
                 scale: 0.4
@@ -155,7 +155,7 @@ Rectangle {
                     id: emotionText
                     anchors.centerIn: parent
                     text: emotionEmoji
-                    font.pixelSize: 14
+                    font.pixelSize: 13
                 }
                 ParallelAnimation {
                     id: emotionPop
