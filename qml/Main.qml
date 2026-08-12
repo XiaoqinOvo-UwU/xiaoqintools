@@ -246,6 +246,19 @@ ApplicationWindow {
                                     font.pixelSize: 14
                                     font.bold: true
                                 }
+                                // unread red dot (proactive AI messages while user is away)
+                                Rectangle {
+                                    width: 10; height: 10
+                                    radius: 5
+                                    color: "#E5534B"
+                                    border.color: Theme.sidebar
+                                    border.width: 1
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.rightMargin: -1
+                                    anchors.topMargin: -1
+                                    visible: cid === contactService.currentId() && root.unreadCount > 0 && !root.chatOpen
+                                }
                             }
                             Column {
                                 Layout.fillWidth: true
@@ -281,6 +294,7 @@ ApplicationWindow {
                                 contactService.setCurrent(cid)
                                 chatPage.openContact(cid)
                                 root.chatOpen = true
+                                root.clearUnread()
                                 root.refreshProfile()
                             }
                         }
@@ -367,7 +381,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.2.2"
+                        text: "小钦的工具 v3.3.0"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -795,6 +809,15 @@ ApplicationWindow {
     property bool chatOpen: false
     property bool appReady: false
 
+    // unread badge for proactive AI messages
+    property int unreadCount: 0
+    function bumpUnread() {
+        root.unreadCount++
+    }
+    function clearUnread() {
+        root.unreadCount = 0
+    }
+
     // avatar image paths (empty = char avatar), stored as file:// URLs
     property string aiAvatarPath: ""
     property string userAvatarPath: ""
@@ -852,6 +875,17 @@ ApplicationWindow {
         target: aiService
         function onChatReply(text) {
             chatPage.appendAi(text)
+        }
+        function onIdleReply(text) {
+            // proactive message from the AI:
+            // - if the chat page is open for the current AI, no sound / no badge
+            // - otherwise play the notification sound and show the unread dot
+            if (root.chatOpen) {
+                root.clearUnread()
+                return
+            }
+            appCore.playNotify()
+            root.bumpUnread()
         }
         function onGreetingReady(text) {
             root.aiGreeting = text

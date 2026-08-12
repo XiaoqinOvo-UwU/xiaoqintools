@@ -13,5 +13,6 @@
         <file>../qml/Pages/EntertainmentPage.qml</file>
         <file>../qml/Pages/SettingsPage.qml</file>
         <file>icons/app.ico</file>
+        <file>notify.wav</file>
     </qresource>
 </RCC>

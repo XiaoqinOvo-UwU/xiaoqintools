@@ -28,6 +28,9 @@ public:
     // returns true if the exe runs from a recognized install location
     Q_INVOKABLE bool isProperLocation();
 
+    // play the notification sound (embedded resource) — non-blocking
+    Q_INVOKABLE void playNotify();
+
 signals:
     void statusTextChanged();
     void toastRequested();

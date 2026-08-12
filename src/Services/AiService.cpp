@@ -438,7 +438,10 @@ void AiService::idleChat()
         QString out = raw;
         out.remove(actRe);
         out.remove(delayRe);
-        emit chatReply(out.trimmed());
+        QString text = out.trimmed();
+        // both: show in chat, and flag as a proactive (idle) message
+        emit chatReply(text);
+        emit idleReply(text);
         watcher->deleteLater();
     });
     QFuture<QString> future = QtConcurrent::run([prompt]() {

@@ -68,6 +68,7 @@ public:
 
 signals:
     void chatReply(QString text);
+    void idleReply(QString text);            // AI initiated a chat on its own (proactive)
     void thinkingReady(QString text);
     void greetingReady(QString text);
     void emotionSignal(QString emotion, qreal intensity); // AIRI-style ACT token playback
