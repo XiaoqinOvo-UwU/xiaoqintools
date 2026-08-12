@@ -338,10 +338,9 @@ Rectangle {
     }
 
     // human-like reply delay: wait "typing time" proportional to text length,
-    // then reveal the full reply at once.
+    // then reveal the full reply at once. Each reply uses its own timer so
+    // rapid consecutive messages don't cancel each other.
     function appendAi(text) {
-        replyTimer.stop()
-        pendingReply = text
         // ensure placeholder bubble exists
         if (msgModel.count === 0 || !msgModel.get(msgModel.count-1).isAi) {
             msgModel.append({ "isAi": true, "msg": "..." })
@@ -349,45 +348,60 @@ Rectangle {
         // typing speed ~ 120ms per char, clamp to 1.5s ~ 12s
         var ms = Math.round(text.length * 120)
         ms = Math.max(1500, Math.min(ms, 12000))
-        replyTimer.interval = ms
         setHeaderStatus(aiService.aiName() + " 正在输入...")
-        replyTimer.start()
+        replyTimers.append({ "text": text, "ms": ms, "left": 0 })
+        // process the queue: if nothing is showing, start the first one
+        if (!typingActive) startNextReply()
     }
 
-    property string pendingReply: ""
+    property var replyTimers: []
+    property bool typingActive: false
+    property string activeReply: ""
+
+    function startNextReply() {
+        if (replyTimers.length === 0) {
+            typingActive = false
+            setHeaderStatus("在线")
+            return
+        }
+        typingActive = true
+        var item = replyTimers[0]
+        activeReply = item.text
+        replyTimer.interval = item.ms
+        replyTimer.start()
+    }
 
     Timer {
         id: replyTimer
         repeat: false
         onTriggered: {
-            // reveal the full reply at once (after the simulated typing time)
+            // reveal this reply in the last AI placeholder bubble
+            var text = chatPage.activeReply
             if (msgModel.count > 0) {
                 var last = msgModel.get(msgModel.count-1)
                 if (last.isAi)
-                    msgModel.set(msgModel.count-1, { "isAi": true, "msg": pendingReply })
+                    msgModel.set(msgModel.count-1, { "isAi": true, "msg": text })
                 else
-                    msgModel.append({ "isAi": true, "msg": pendingReply })
+                    msgModel.append({ "isAi": true, "msg": text })
             } else {
-                msgModel.append({ "isAi": true, "msg": pendingReply })
+                msgModel.append({ "isAi": true, "msg": text })
             }
             msgView.positionViewAtEnd()
-            setHeaderStatus("在线")
-            // persistence is best-effort
+            // persistence (best-effort)
             try {
-                var cid = currentContactId.length > 0 ? currentContactId : contactService.currentId()
+                var cid = chatPage.currentContactId.length > 0 ? chatPage.currentContactId : contactService.currentId()
                 if (cid.length > 0) {
                     var db = chatDb()
                     db.transaction(function(tx) {
                         tx.executeSql("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, contact TEXT, isAi INTEGER, msg TEXT)")
-                        var rs = tx.executeSql("SELECT id FROM messages WHERE contact=? AND isAi=1 ORDER BY id DESC LIMIT 1", [cid])
-                        if (rs.rows.length > 0)
-                            tx.executeSql("UPDATE messages SET msg=? WHERE id=?", [pendingReply, rs.rows.item(0).id])
-                        else
-                            tx.executeSql("INSERT INTO messages (contact, isAi, msg) VALUES (?,1,?)", [cid, pendingReply])
+                        tx.executeSql("INSERT INTO messages (contact, isAi, msg) VALUES (?,1,?)", [cid, text])
                     })
-                    chatPage.messageSaved(cid, true, pendingReply)
+                    chatPage.messageSaved(cid, true, text)
                 }
             } catch (e) { }
+            // advance the queue
+            chatPage.replyTimers.shift()
+            chatPage.startNextReply()
         }
     }
 
