@@ -361,7 +361,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.1.3"
+                        text: "小钦的工具 v3.1.4"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -509,8 +509,8 @@ ApplicationWindow {
     // ================= AI PROFILE DIALOG (click AI avatar in chat) =================
     Dialog {
         id: aiProfileDialog
-        width: 420
-        height: 480
+        width: 440
+        height: Math.min(560, profileCol.implicitHeight + 110)
         modal: true
         x: (root.width - width) / 2
         y: (root.height - height) / 2
@@ -567,6 +567,7 @@ ApplicationWindow {
             clip: true
             ScrollBar.vertical.policy: ScrollBar.AsNeeded
             ColumnLayout {
+                id: profileCol
                 width: aiProfileDialog.width - 36
                 spacing: 10
 
@@ -583,7 +584,8 @@ ApplicationWindow {
                 TextArea {
                     id: profileAiPersonality
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 70
+                    // grow with content so long personas are fully visible & editable
+                    implicitHeight: Math.max(90, contentHeight + 20)
                     color: Theme.text
                     text: aiService.aiPersonality()
                     wrapMode: TextEdit.Wrap
