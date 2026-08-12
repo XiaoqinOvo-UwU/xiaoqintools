@@ -17,7 +17,8 @@ Rectangle {
 
     // ---- persistent per-contact chat (same conversation every time) ----
     function chatDb() {
-        return LocalStorage.openDatabaseSync("XiaoQinChat", "1.0", "chat history", 8*1024*1024)
+        var db = LocalStorage.openDatabaseSync("XiaoQinChat", "1.0", "chat history", 8*1024*1024)
+        return db
     }
 
     function loadChat(contactId) {
@@ -324,16 +325,12 @@ Rectangle {
         msgView.positionViewAtEnd()
         setHeaderStatus(aiService.aiName() + " 正在输入...")
         aiService.sendMessage(t)
-    // persistence is best-effort; never let it break the chat
-    try {
-        var cid = currentContactId.length > 0 ? currentContactId : contactService.currentId()
-        if (cid.length > 0) saveMsg(cid, false, t)
-        else {
-            var f2 = Qt.createQmlObject('import QtQuick 2.0; Text { }', chatPage, "t")
-            appCore.showToast("保存失败:无联系人")
-        }
-    } catch (e) { appCore.showToast("保存失败:" + e) }
-}
+        // persistence is best-effort; never let it break the chat
+        try {
+            var cid = currentContactId.length > 0 ? currentContactId : contactService.currentId()
+            if (cid.length > 0) saveMsg(cid, false, t)
+        } catch (e) { }
+    }
 
     function setHeaderStatus(s) {
         headerStatus.text = s
