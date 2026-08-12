@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.3.5"
+                        text: "小钦的工具 v3.3.6"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -927,7 +927,17 @@ ApplicationWindow {
     Connections {
         target: chatPage
         function onMessageSaved(contactId, isAi, msg) {
-            // refresh the whole contact list so every preview reads fresh from DB
+            // update the preview for this contact immediately (latest wins),
+            // regardless of DB state — refresh afterwards for consistency
+            for (var i = 0; i < contactModel.count; i++) {
+                var it = contactModel.get(i)
+                if (it.cid === contactId) {
+                    var preview = (isAi ? "" : "我: ") + msg
+                    contactModel.set(i, { "cid": it.cid, "cname": it.cname, "hasAvatar": it.hasAvatar, "avatarUrl": it.avatarUrl, "lastMsg": preview })
+                    break
+                }
+            }
+            // also refresh from DB so restart-time state stays consistent
             root.refreshContacts()
         }
     }
