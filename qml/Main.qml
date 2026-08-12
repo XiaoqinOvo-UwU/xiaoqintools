@@ -361,7 +361,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.1.0"
+                        text: "小钦的工具 v3.1.1"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }

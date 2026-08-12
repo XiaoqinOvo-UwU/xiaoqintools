@@ -1,6 +1,6 @@
-; 小钦的工具 v3.1.0 安装脚本
+; 小钦的工具 v3.1.1 安装脚本
 #define MyAppName "小钦的工具"
-#define MyAppVersion "3.1.0"
+#define MyAppVersion "3.1.1"
 #define MyAppExeName "XiaoQinTools.exe"
 #define MyAppPublisher "XiaoQinUwU"
 #define MyAppURL "https://github.com/xiaoqinnb666/xiaoqintools"
