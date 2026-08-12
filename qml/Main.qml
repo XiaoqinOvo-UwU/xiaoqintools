@@ -66,7 +66,8 @@ ApplicationWindow {
                     var raw = contactService.contactAvatarPath(parts[0])
                     avatarUrl = raw.length > 0 ? "file:///" + raw.replace(/\\/g, "/") : ""
                 }
-                contactModel.append({ "cid": parts[0], "cname": parts[1], "hasAvatar": parts[2], "avatarUrl": avatarUrl, "lastMsg": lastMsgFor(parts[0]) })
+                var preview = lastMsgFor(parts[0])
+                contactModel.append({ "cid": parts[0], "cname": parts[1], "hasAvatar": parts[2], "avatarUrl": avatarUrl, "lastMsg": preview })
             }
         }
     }
@@ -738,13 +739,18 @@ ApplicationWindow {
             clip: true
             ScrollBar.vertical.policy: ScrollBar.AsNeeded
             TextArea {
+                id: memoryViewText
                 readOnly: true
                 color: Theme.text
                 font.pixelSize: 13
                 wrapMode: TextEdit.Wrap
-                text: aiService.memoryDetail()
+                text: ""
                 background: null
             }
+        }
+        onOpened: {
+            // always re-read the memory so the dialog shows fresh data
+            memoryViewText.text = aiService.memoryDetail()
         }
     }
 
@@ -921,15 +927,8 @@ ApplicationWindow {
     Connections {
         target: chatPage
         function onMessageSaved(contactId, isAi, msg) {
-            // update the contact card preview in place
-            for (var i = 0; i < contactModel.count; i++) {
-                var it = contactModel.get(i)
-                if (it.cid === contactId) {
-                    var preview = (isAi ? "" : "我: ") + msg
-                    contactModel.set(i, { "cid": it.cid, "cname": it.cname, "hasAvatar": it.hasAvatar, "avatarUrl": it.avatarUrl, "lastMsg": preview })
-                    break
-                }
-            }
+            // refresh the whole contact list so every preview reads fresh from DB
+            root.refreshContacts()
         }
     }
 
