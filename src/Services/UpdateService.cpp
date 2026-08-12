@@ -13,7 +13,6 @@
 #include <QProcess>
 #include <QCoreApplication>
 #include <QTimer>
-#include <QTextStream>
 #include <QRegularExpression>
 #include <QNetworkProxy>
 
@@ -191,7 +190,6 @@ void UpdateService::downloadAndInstall()
         }
 
         // work in a staging dir to avoid partial replacement on failure
-        QString appDir = QCoreApplication::applicationDirPath();
         QString staging = QDir::temp().filePath("XiaoQinToolsStage_" + QString::number(QCoreApplication::applicationPid()));
         QDir().mkpath(staging);
         QDir().mkpath(staging + "/new");
@@ -205,41 +203,20 @@ void UpdateService::downloadAndInstall()
             return;
         }
 
-        // the zip may contain a single top-level folder; find the exe
-        QString newExe;
+        // 2) find the installer exe inside the zip and launch it
+        QString setupExe;
         {
-            QDirIterator it(staging + "/new", QStringList() << "XiaoQinTools.exe", QDir::Files,
-                            QDirIterator::Subdirectories);
-            if (it.hasNext()) newExe = it.next();
+            QDirIterator it(staging + "/new", QStringList() << "XiaoQinTools-*-setup.exe" << "setup.exe",
+                            QDir::Files, QDirIterator::Subdirectories);
+            if (it.hasNext()) setupExe = it.next();
         }
-        if (newExe.isEmpty()) {
-            emit downloadFinished(false, "更新包内容异常（未找到 XiaoQinTools.exe）");
+        if (setupExe.isEmpty()) {
+            emit downloadFinished(false, "更新包内容异常（未找到安装程序）");
             return;
         }
-        QString newDir = QFileInfo(newExe).absolutePath();
 
-        // 2) replace appDir with the new content
-        bool ok = false;
-        {
-            // copy new content over the running app dir; exe is locked while running,
-            // so schedule a swap via a batch that runs after we exit
-            QString updater = QDir::temp().filePath("xiaoqin_update.bat");
-            QFile f(updater);
-            if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                QTextStream ts(&f);
-                ts << "@echo off\r\n";
-                ts << "timeout /t 2 /nobreak >nul\r\n";
-                ts << "xcopy /y /e /i \"" << newDir << "\" \"" << appDir << "\" >nul\r\n";
-                ts << "start \"\" \"" << appDir << "/XiaoQinTools.exe\"\r\n";
-                f.close();
-                ok = true;
-            }
-            if (ok) {
-                QProcess::startDetached("cmd.exe", QStringList() << "/c" << updater);
-                QTimer::singleShot(300, qApp, &QCoreApplication::quit);
-            }
-        }
-        if (!ok)
-            emit downloadFinished(false, "更新失败：无法写入更新脚本");
+        // 3) launch the installer (silent), then exit so files can be replaced
+        QProcess::startDetached(setupExe, QStringList() << "/VERYSILENT" << "/SUPPRESSMSGBOXES" << "/NORESTART");
+        QTimer::singleShot(1500, qApp, &QCoreApplication::quit);
     });
 }
