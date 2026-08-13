@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.1"
+                        text: "小钦的工具 v3.5.2"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
