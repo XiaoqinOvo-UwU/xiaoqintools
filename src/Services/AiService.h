@@ -2,6 +2,7 @@
 #include <QObject>
 #include <QString>
 #include <QHash>
+#include <QJsonArray>
 class QTimer;
 
 // AI companion card: chat with DeepSeek + long-term memory.
@@ -63,7 +64,27 @@ public:
     Q_INVOKABLE void addMemoryNote(const QString &note); // user tells AI something to remember
     Q_INVOKABLE void clearMemory();                      // wipe memory (keep created stamp)
 
+    // ---- companion: relationship state + event memory (batch 1) ----
+    Q_INVOKABLE void recordEvent(const QString &type, const QString &summary); // event memory (with date)
+    Q_INVOKABLE QString eventMemoryText(int maxEvents); // recent events for prompt injection
+
     Q_INVOKABLE QString foregroundApp();                 // current foreground window title (lightweight)
+
+    // ---- batch 2: system state sensing + analysis ----
+    Q_INVOKABLE QString systemStateJson();               // {cpu, mem, hour, foreground, idleMs, ...}
+    Q_INVOKABLE QString analyzeUserState();              // human state: gaming/working/late_night/away/relaxed
+    Q_INVOKABLE QString batteryState();                  // battery percent + plugged (or empty on desktop)
+
+    // ---- batch 3: emotion + response strategy ----
+    Q_INVOKABLE QString inferUserEmotion(const QString &text); // happy/tired/stressed/lonely/normal
+
+    // privacy toggles (forwarded to ConfigService for QML access)
+    Q_INVOKABLE bool allowStateRead();
+    Q_INVOKABLE bool allowTimeRecord();
+    Q_INVOKABLE bool allowLongTermMemory();
+    Q_INVOKABLE void setAllowStateRead(bool v);
+    Q_INVOKABLE void setAllowTimeRecord(bool v);
+    Q_INVOKABLE void setAllowLongTermMemory(bool v);
 
     // ---- PC activity monitor (startup/shutdown + software usage) ----
     Q_INVOKABLE void startActivityMonitor();   // begin periodic foreground-app sampling
@@ -84,6 +105,7 @@ private:
     QString readMemory() const;
     void writeMemory(const QString &json);
     static QString callDeepSeekStatic(const QString &system, const QString &user);
+    static QString callDeepSeekMessages(const QJsonArray &messages);
     QString jsonGet(const QString &json, const QString &key);
     QString jsonSet(const QString &json, const QString &key, const QString &value);
 

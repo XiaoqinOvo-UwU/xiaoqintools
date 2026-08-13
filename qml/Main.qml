@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.4.3"
+                        text: "小钦的工具 v3.5.0"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -888,6 +888,7 @@ ApplicationWindow {
         if (!appCore.isProperLocation())
             locationWarnTimer.start()
         idleTimer.start()
+        restTimer.start()
     }
 
     Timer {
@@ -974,20 +975,24 @@ ApplicationWindow {
         interval: 30000
         repeat: true
         onTriggered: {
-            // Companion mode ONLY for Minecraft in the foreground -> chat after
-            // a short delay. Everything else (any other game, normal apps) waits
-            // for 8 minutes of real system-wide idle. No "don't disturb" list.
+            // Smart companion triggers:
+            //  - Minecraft foreground -> chat after ~1 min (keys always pressed in game)
+            //  - late night (23-05) -> lower the idle threshold for more company
+            //  - otherwise -> 8 min of real idle
+            //  - very long away (>30 min) -> also chat ("回来啦")
             if (!root.idleChatDone) {
                 var shouldChat = false
                 if (aiService.isForegroundMinecraft()) {
-                    // playing Minecraft: don't wait for idle (keys are always pressed)
-                    // but don't spam — at least a minute since the last chat
                     if (!root.lastIdleChatAt || Date.now() - root.lastIdleChatAt >= 60 * 1000)
                         shouldChat = true
                 } else {
                     var idleMs = aiService.lastInputMs()
                     if (idleMs < 0) idleMs = Date.now() - root.lastInteraction
-                    shouldChat = idleMs >= 8 * 60 * 1000
+                    var h = new Date().getHours()
+                    var lateNight = (h >= 23 || h < 5)
+                    var threshold = lateNight ? 4 * 60 * 1000 : 8 * 60 * 1000
+                    if (idleMs >= threshold || idleMs >= 30 * 60 * 1000)
+                        shouldChat = true
                 }
                 if (shouldChat) {
                     root.idleChatDone = true
@@ -1000,6 +1005,23 @@ ApplicationWindow {
                     aiService.idleChat()
                     islandToast.show(aiService.aiName() + "想找你聊聊~", 6000)
                 }
+            }
+        }
+    }
+
+    // ================= long-session reminder: nudge to rest after long continuous use =================
+    property int appStartTime: Date.now()
+    property bool restReminded: false
+    Timer {
+        id: restTimer
+        interval: 30 * 60 * 1000   // check every 30 min
+        repeat: true
+        onTriggered: {
+            if (root.restReminded) return
+            var elapsedH = (Date.now() - root.appStartTime) / 3600000
+            if (elapsedH >= 3) {
+                root.restReminded = true
+                islandToast.show("已经连续使用 3 小时了，起来活动一下吧~", 8000)
             }
         }
     }

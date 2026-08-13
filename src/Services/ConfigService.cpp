@@ -44,6 +44,9 @@ void ConfigService::load()
     if (o.contains("avatar_char")) m_avatarChar = o.value("avatar_char").toString();
     if (o.contains("ai_name")) m_aiName = o.value("ai_name").toString();
     if (o.contains("ai_personality")) m_aiPersonality = o.value("ai_personality").toString();
+    if (o.contains("allow_state_read")) m_allowStateRead = o.value("allow_state_read").toBool(true);
+    if (o.contains("allow_time_record")) m_allowTimeRecord = o.value("allow_time_record").toBool(true);
+    if (o.contains("allow_long_term_memory")) m_allowLongTermMemory = o.value("allow_long_term_memory").toBool(true);
     f.close();
 }
 
@@ -59,6 +62,9 @@ void ConfigService::save()
     o.insert("avatar_char", m_avatarChar);
     o.insert("ai_name", m_aiName);
     o.insert("ai_personality", m_aiPersonality);
+    o.insert("allow_state_read", m_allowStateRead);
+    o.insert("allow_time_record", m_allowTimeRecord);
+    o.insert("allow_long_term_memory", m_allowLongTermMemory);
     QFile f(configPath());
     if (!f.open(QIODevice::WriteOnly)) return;
     f.write(QJsonDocument(o).toJson());

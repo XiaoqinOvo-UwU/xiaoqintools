@@ -21,6 +21,14 @@ public:
     QString aiName() const { return m_aiName; }
     QString aiPersonality() const { return m_aiPersonality; }
 
+    // privacy toggles (default ON)
+    bool allowStateRead() const { return m_allowStateRead; }
+    bool allowTimeRecord() const { return m_allowTimeRecord; }
+    bool allowLongTermMemory() const { return m_allowLongTermMemory; }
+    void setAllowStateRead(bool v) { m_allowStateRead = v; save(); }
+    void setAllowTimeRecord(bool v) { m_allowTimeRecord = v; save(); }
+    void setAllowLongTermMemory(bool v) { m_allowLongTermMemory = v; save(); }
+
     void setBaseUrl(const QString &v) { m_baseUrl = v; save(); }
     void setModel(const QString &v) { m_model = v; save(); }
     void setApiKey(const QString &v) { m_apiKey = v; save(); }
@@ -50,4 +58,7 @@ private:
     QString m_avatarChar = "用";
     QString m_aiName = "AI助手";
     QString m_aiPersonality = "温柔、可爱、像朋友";
+    bool m_allowStateRead = true;
+    bool m_allowTimeRecord = true;
+    bool m_allowLongTermMemory = true;
 };

@@ -292,6 +292,84 @@ Page {
                         color: Theme.textDim
                         font.pixelSize: 12
                     }
+
+                    // ---- privacy toggles ----
+                    Text { text: "隐私与陪伴"; color: "white"; font.pixelSize: 15; font.bold: true; Layout.topMargin: 8 }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Text {
+                            Layout.fillWidth: true
+                            text: "允许 AI 读取电脑状态（当前应用/空闲/电量）"
+                            color: Theme.text
+                            font.pixelSize: 12
+                            wrapMode: Text.Wrap
+                        }
+                        Text {
+                            text: aiService.allowStateRead() ? "开" : "关"
+                            color: aiService.allowStateRead() ? Theme.ok : Theme.textDim
+                            font.pixelSize: 11
+                        }
+                        Switch {
+                            id: stateSwitch
+                            checked: aiService.allowStateRead()
+                            onToggled: {
+                                aiService.setAllowStateRead(checked)
+                                root.note = checked ? "已开启状态感知" : "已关闭状态感知"
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Text {
+                            Layout.fillWidth: true
+                            text: "允许记录使用时长与习惯"
+                            color: Theme.text
+                            font.pixelSize: 12
+                            wrapMode: Text.Wrap
+                        }
+                        Text {
+                            text: aiService.allowTimeRecord() ? "开" : "关"
+                            color: aiService.allowTimeRecord() ? Theme.ok : Theme.textDim
+                            font.pixelSize: 11
+                        }
+                        Switch {
+                            id: timeSwitch
+                            checked: aiService.allowTimeRecord()
+                            onToggled: {
+                                aiService.setAllowTimeRecord(checked)
+                                root.note = checked ? "已开启时长记录" : "已关闭时长记录"
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Text {
+                            Layout.fillWidth: true
+                            text: "允许长期记忆（AI 记住共同经历）"
+                            color: Theme.text
+                            font.pixelSize: 12
+                            wrapMode: Text.Wrap
+                        }
+                        Text {
+                            text: aiService.allowLongTermMemory() ? "开" : "关"
+                            color: aiService.allowLongTermMemory() ? Theme.ok : Theme.textDim
+                            font.pixelSize: 11
+                        }
+                        Switch {
+                            id: memSwitch
+                            checked: aiService.allowLongTermMemory()
+                            onToggled: {
+                                aiService.setAllowLongTermMemory(checked)
+                                root.note = checked ? "已开启长期记忆" : "已关闭长期记忆"
+                            }
+                        }
+                    }
                 }
             }
 
@@ -330,7 +408,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小钦的工具 v3.3.8 · 泉此方天下第一"
+                text: "小钦的工具 v3.5.0 · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
             }
