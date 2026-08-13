@@ -29,6 +29,22 @@ public:
     Q_INVOKABLE void idleChat();             // async: AI initiates a topic -> chatReply
     Q_INVOKABLE qint64 lastInputMs();        // ms since the last keyboard/mouse input system-wide
 
+    // ---- batch A: proactive conversation engine ----
+    Q_INVOKABLE bool isUserBusy();           // true if coding/typing-heavy foreground
+    Q_INVOKABLE QString userActivityState(); // "coding"/"gaming"/"idle"/"away"/"late_night"
+    Q_INVOKABLE void trackUnfinishedTopic(const QString &topic, int importance); // save unfinished topic
+    Q_INVOKABLE QString unfinishedTopicsText(int max); // recent unfinished topics for prompt
+    Q_INVOKABLE void recordInterest(const QString &interest); // bump interest weight
+    Q_INVOKABLE QString interestsText(int max); // top interests for prompt
+    Q_INVOKABLE QString aiStateJson();       // {"mood":"calm","energy":80}
+    Q_INVOKABLE void setAiMood(const QString &mood); // update AI mood (continuity)
+    Q_INVOKABLE void adjustAiEnergy(int delta);      // energy after interactions
+
+    // ---- batch B: personality + relationship ----
+    Q_INVOKABLE QString personalityText();   // structured traits/style from personality.json
+    Q_INVOKABLE QString relationshipText();  // relationship continuity for prompt
+    Q_INVOKABLE void bumpRelationship(int intimacyDelta, int trustDelta);
+
     // user profile passthrough (stored in config)
     Q_INVOKABLE QString userName();
     Q_INVOKABLE QString avatarChar();

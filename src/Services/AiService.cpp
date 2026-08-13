@@ -538,10 +538,16 @@ void AiService::idleChat()
     QString mem = readMemory();
     QString user = ConfigService::instance().userName();
     QString ai = ContactService::instance().currentName();
-    QString personality = ContactService::instance().currentPersonality();
     QString activity = activitySummary(); // already cheap (in-memory/JSON)
     QString fg = foregroundApp();         // cheap win32 call
     QString recent = m_chatBuffer.join("\n"); // last few messages if any
+
+    // proactive engine inputs: state, unfinished topics, interests, events
+    QString state = userActivityState();
+    QString aiState = aiStateJson();
+    QString unfinished = unfinishedTopicsText(5);
+    QString interests = interestsText(5);
+    QString events = eventMemoryText(4);
 
     auto *watcher = new QFutureWatcher<QString>(this);
     connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
@@ -555,6 +561,11 @@ void AiService::idleChat()
         out.remove(actRe);
         out.remove(delayRe);
         QString text = out.trimmed();
+        // AI may decide to stay quiet (e.g. user is coding) -> skip
+        if (text.isEmpty()) {
+            watcher->deleteLater();
+            return;
+        }
         // both: show in chat, and flag as a proactive (idle) message
         emit chatReply(text);
         emit idleReply(text);
@@ -562,10 +573,9 @@ void AiService::idleChat()
     });
     // collect the process snapshot in the worker thread (one tasklist call,
     // only on idle trigger — zero cost during normal use)
-    QFuture<QString> future = QtConcurrent::run([mem, user, ai, personality, activity, fg, recent, this]() {
+    QFuture<QString> future = QtConcurrent::run([mem, user, ai, activity, fg, recent, state, aiState, unfinished, interests, events, this]() {
         QString procs = processSnapshot();
         QStringList ctx;
-        QString state = analyzeUserState();
         if (!state.isEmpty())
             ctx << "- 用户当前状态：" + state;
         if (!activity.isEmpty() && !activity.startsWith("（"))
@@ -577,15 +587,25 @@ void AiService::idleChat()
         QString recentBlock;
         if (!recent.isEmpty())
             recentBlock = "\n你们最近聊的：\n" + recent + "\n";
-        QString prompt = "你是" + ai + "，性格" + personality + "。用户" + user + "已经有一会儿没操作电脑了。\n"
+        QString topicsBlock;
+        if (!unfinished.isEmpty())
+            topicsBlock = "\n你们之前聊到但还没结束的话题：\n" + unfinished + "\n";
+        QString interestBlock;
+        if (!interests.isEmpty())
+            interestBlock = "\n用户感兴趣的方向（自然提起，别说'你喜欢XX'）：\n" + interests + "\n";
+        QString eventsBlock;
+        if (!events.isEmpty())
+            eventsBlock = "\n你们一起经历过的：\n" + events + "\n";
+        QString prompt = "你是" + ai + "，人格：" + personalityText() + "。用户" + user + "已经有一会儿没操作电脑了。\n"
+            + "【我们的关系】" + relationshipText() + "\n"
             + ctx.join("\n")
-            + recentBlock
-            + "\n请结合上面的信息和用户当前状态，自然地主动找个话题和ta聊一句。"
-              "如果用户深夜还没睡，语气更温柔关心；如果用户在打游戏，就轻松地提一句；"
-              "如果用户刚离开回来，就用'回来啦'打招呼。"
-              "可以接着上次聊的话题，也可以聊聊ta在玩/在做的、关心的、或随便分享。"
+            + recentBlock + topicsBlock + interestBlock + eventsBlock
+            + "\n请结合上面信息主动找个话题和ta聊一句：优先延续未完成的话题，其次是共同经历和兴趣，"
+              "自然得像老朋友提起，不要说'根据记忆'。"
+              "如果用户深夜还没睡，语气更温柔；如果用户在打游戏，轻松提一句别啰嗦；"
+              "如果用户刚离开回来，用'回来啦'打招呼；如果用户在做正事（写代码等），这次就安静别打扰，输出空字符串。"
               "像朋友一样，简短一句话，不要生硬，不要罗列数据。\n"
-              "你可以参考记忆：\n" + mem + "\n只输出这句话本身。";
+              "你的当前状态：" + aiState + "\n你可以参考记忆：\n" + mem + "\n只输出这句话本身，若决定不打扰则输出空。";
         return callDeepSeekStatic("你是温柔可爱的AI陪伴者。", prompt);
     });
     watcher->setFuture(future);
@@ -868,7 +888,6 @@ void AiService::sendMessage(const QString &text)
     QString mem = readMemory();
     QString user = ConfigService::instance().userName();
     QString ai = ContactService::instance().currentName();
-    QString personality = ContactService::instance().currentPersonality();
 
     // remember this user turn for auto memory (after N turns we summarize)
     QString userForMemory = text.trimmed();
@@ -910,7 +929,9 @@ void AiService::sendMessage(const QString &text)
     else
         strategy = "正常聊天，自然延续。";
 
-    QString system = "你是" + ai + "，性格" + personality + "，用户叫" + user + "。\n"
+    QString system = "你是" + ai + "，用户叫" + user + "。\n"
+        + "【人格】\n" + personalityText() + "\n"
+        + "【我们的关系】" + relationshipText() + "\n"
         + "规则：像真人聊天，不要客服语气，不频繁提醒自己是AI，根据用户情绪回应。\n"
         + "重要：不要机械复述或回显用户的原话，不要反复引用同一句话。"
           "在回应中自然承接上一句，但补充新角度、新细节、新问题，让对话自然延续而非原地打转。"
@@ -922,7 +943,10 @@ void AiService::sendMessage(const QString &text)
           "令牌不会显示给用户，不要解释它们。\n"
         // companion: event memory makes the AI a persistent partner,
         // not a fresh chatbot every session
-        + "【我记得的共同经历】\n" + (eventMemoryText(5).isEmpty() ? QString("（还没有太多回忆，慢慢积累）") : eventMemoryText(5));
+        + "【我记得的共同经历】\n" + (eventMemoryText(5).isEmpty() ? QString("（还没有太多回忆，慢慢积累）") : eventMemoryText(5))
+        + "\n【你感兴趣的事】\n" + (interestsText(4).isEmpty() ? QString("（还在慢慢了解你）") : interestsText(4))
+        + "\n【还没聊完的话题】\n" + (unfinishedTopicsText(3).isEmpty() ? QString("（暂无）") : unfinishedTopicsText(3))
+        + "\n【我此刻的状态】" + aiStateJson();
 
     // Bucket 2: memory + current state, flattened bullet list.
     // Keep memory small (last few core notes) so we don't flood the prompt and
@@ -984,7 +1008,7 @@ void AiService::sendMessage(const QString &text)
     msgs.append(curMsg);
 
     auto *watcher = new QFutureWatcher<QString>(this);
-    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, userForMemory]() {
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, userForMemory, emotion]() {
         QString raw = watcher->result();
 
         // strip <think> tags the model may add on its own
@@ -1041,6 +1065,26 @@ void AiService::sendMessage(const QString &text)
 
         // auto memory: track this turn, summarize after enough turns
         trackChatTurn(userForMemory, speech.isEmpty() ? raw : speech);
+
+        // proactive engine: learn interests from what the user keeps bringing up
+        {
+            static const struct { const char *kw; const char *interest; } interests[] = {
+                { "minecraft", "Minecraft" }, { "我的世界", "Minecraft" },
+                { "小说", "小说" }, { "写小说", "小说创作" },
+                { "代码", "编程" }, { "软件", "软件开发" }, { "开发", "软件开发" },
+                { "游戏", "游戏" }, { "音乐", "音乐" }, { "动漫", "动漫" },
+                { "健身", "健身" }, { "学习", "学习" },
+            };
+            QString lower = userForMemory.toLower();
+            for (const auto &in : interests) {
+                if (lower.contains(in.kw)) { recordInterest(in.interest); break; }
+            }
+            // energy slowly drains per exchange, mood drifts toward user emotion
+            adjustAiEnergy(-1);
+            setAiMood(emotion == "happy" ? "cheerful" : emotion == "tired" ? "gentle" : "calm");
+            // relationship continuity: each meaningful chat deepens it a little
+            bumpRelationship(1, 0);
+        }
     });
     QFuture<QString> future = QtConcurrent::run([msgs]() {
         return callDeepSeekMessages(msgs);
@@ -1329,3 +1373,294 @@ bool AiService::allowLongTermMemory() { return ConfigService::instance().allowLo
 void AiService::setAllowStateRead(bool v) { ConfigService::instance().setAllowStateRead(v); }
 void AiService::setAllowTimeRecord(bool v) { ConfigService::instance().setAllowTimeRecord(v); }
 void AiService::setAllowLongTermMemory(bool v) { ConfigService::instance().setAllowLongTermMemory(v); }
+
+// ================= Batch A: proactive conversation engine =================
+
+// state file: %APPDATA%/XiaoQin/XiaoQinTools/ai_state.json
+static QString aiStatePath()
+{
+    return ConfigService::instance().configDir() + "/ai_state.json";
+}
+
+static QJsonObject readAiState()
+{
+    QFile f(aiStatePath());
+    QJsonObject o;
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        if (d.isObject()) o = d.object();
+        f.close();
+    }
+    if (o.isEmpty()) {
+        o.insert("mood", "calm");
+        o.insert("energy", 80);
+    }
+    return o;
+}
+
+static void writeAiState(const QJsonObject &o)
+{
+    QFile f(aiStatePath());
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(QJsonDocument(o).toJson());
+        f.close();
+    }
+}
+
+QString AiService::aiStateJson()
+{
+    QJsonObject o = readAiState();
+    return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
+}
+
+void AiService::setAiMood(const QString &mood)
+{
+    QJsonObject o = readAiState();
+    o.insert("mood", mood);
+    writeAiState(o);
+}
+
+void AiService::adjustAiEnergy(int delta)
+{
+    QJsonObject o = readAiState();
+    int e = qBound(0, o.value("energy").toInt() + delta, 100);
+    o.insert("energy", e);
+    writeAiState(o);
+}
+
+// ---- unfinished topics ----
+static QString unfinishedPath()
+{
+    return ConfigService::instance().configDir() + "/unfinished_topics.json";
+}
+
+void AiService::trackUnfinishedTopic(const QString &topic, int importance)
+{
+    QString t = topic.trimmed();
+    if (t.isEmpty()) return;
+    QFile f(unfinishedPath());
+    QJsonArray arr;
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        if (d.isArray()) arr = d.array();
+        f.close();
+    }
+    // remove an existing entry with the same topic, then prepend the fresh one
+    QJsonArray kept;
+    for (const QJsonValue &v : arr) {
+        if (v.toObject().value("topic").toString() != t) kept.append(v);
+    }
+    QJsonObject entry;
+    entry.insert("topic", t);
+    entry.insert("importance", importance);
+    entry.insert("last_time", QDate::currentDate().toString("MM-dd"));
+    entry.insert("status", "unfinished");
+    kept.prepend(entry);
+    if (kept.size() > 20) { // bound
+        QJsonArray trimmed;
+        for (int i = 0; i < 20; i++) trimmed.append(kept.at(i));
+        kept = trimmed;
+    }
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(QJsonDocument(kept).toJson());
+        f.close();
+    }
+}
+
+QString AiService::unfinishedTopicsText(int max)
+{
+    QFile f(unfinishedPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+    QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    if (!d.isArray()) return QString();
+    QJsonArray arr = d.array();
+    QStringList lines;
+    int n = qMin(arr.size(), max);
+    for (int i = 0; i < n; i++) {
+        QJsonObject o = arr.at(i).toObject();
+        lines << "- [" + o.value("last_time").toString() + "] " + o.value("topic").toString();
+    }
+    return lines.join("\n");
+}
+
+// ---- interests (weighted topics the user cares about) ----
+static QString interestPath()
+{
+    return ConfigService::instance().configDir() + "/interests.json";
+}
+
+void AiService::recordInterest(const QString &interest)
+{
+    QString in = interest.trimmed();
+    if (in.isEmpty()) return;
+    QFile f(interestPath());
+    QJsonObject o;
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        if (d.isObject()) o = d.object();
+        f.close();
+    }
+    int cur = o.value(in).toInt();
+    o.insert(in, cur + 1);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(QJsonDocument(o).toJson());
+        f.close();
+    }
+}
+
+QString AiService::interestsText(int max)
+{
+    QFile f(interestPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+    QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    if (!d.isObject()) return QString();
+    QJsonObject o = d.object();
+    QMultiMap<int, QString> sorted; // weight -> interest
+    for (auto it = o.constBegin(); it != o.constEnd(); ++it)
+        sorted.insert(it.value().toInt(), it.key());
+    QStringList lines;
+    QStringList keys = sorted.values();
+    int n = qMin(keys.size(), max);
+    for (int i = keys.size() - 1, c = 0; c < n && i >= 0; i--, c++)
+        lines << "- " + keys.at(i);
+    return lines.join("\n");
+}
+
+// ---- busy / activity state ----
+bool AiService::isUserBusy()
+{
+    QString fg = foregroundApp();
+    // coding / writing-heavy apps: don't interrupt
+    static const QStringList busyApps = {
+        "code", "visual studio", "clion", "pycharm", "idea", "xiaoqintools",
+        "notepad", "word", "wps", "typora", "obsidian", "sublime", "vim",
+    };
+    for (const QString &b : busyApps)
+        if (fg.contains(b, Qt::CaseInsensitive)) return true;
+    return false;
+}
+
+QString AiService::userActivityState()
+{
+    int hour = QTime::currentTime().hour();
+    qint64 idle = lastInputMs();
+    QString fg = foregroundApp();
+
+    if (idle >= 0 && idle >= 30 * 60 * 1000)
+        return "away"; // long gone
+    if (hour >= 23 || hour < 5)
+        return "late_night";
+    if (isForegroundMinecraft() || isGameRunning())
+        return "gaming";
+    if (isUserBusy())
+        return "coding";
+    if (idle >= 0 && idle >= 5 * 60 * 1000)
+        return "idle";
+    if (!fg.isEmpty())
+        return "active";
+    return "idle";
+}
+
+// ================= Batch B: personality + relationship =================
+
+static QString personalityPath()
+{
+    return ConfigService::instance().configDir() + "/personality.json";
+}
+
+// structured personality: traits + style. Falls back to the contact persona text.
+QString AiService::personalityText()
+{
+    QFile f(personalityPath());
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        f.close();
+        if (d.isObject()) {
+            QJsonObject o = d.object();
+            QJsonObject traits = o.value("traits").toObject();
+            QJsonObject style = o.value("style").toObject();
+            QStringList lines;
+            if (!traits.isEmpty()) {
+                QStringList tl;
+                for (auto it = traits.constBegin(); it != traits.constEnd(); ++it)
+                    tl << it.key() + ":" + QString::number(it.value().toInt());
+                lines << "性格特质：" + tl.join("，");
+            }
+            if (!style.isEmpty()) {
+                QStringList sl;
+                for (auto it = style.constBegin(); it != style.constEnd(); ++it)
+                    sl << it.key() + "：" + it.value().toString();
+                lines << "说话风格：" + sl.join("，");
+            }
+            if (!lines.isEmpty())
+                return lines.join("\n");
+        }
+    }
+    // fallback to the simple persona text the user already set
+    return ContactService::instance().currentPersonality();
+}
+
+// relationship continuity (relationship.json next to memory)
+static QString relationshipPathB()
+{
+    return ContactService::instance().contactDir(ContactService::instance().currentId()) + "/relationship.json";
+}
+
+static QJsonObject readRelationship()
+{
+    QFile f(relationshipPathB());
+    QJsonObject o;
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        if (d.isObject()) o = d.object();
+        f.close();
+    }
+    if (o.isEmpty()) {
+        o.insert("intimacy", 0);
+        o.insert("trust", 0);
+        o.insert("interaction_days", 0);
+        o.insert("first_met", QDate::currentDate().toString("yyyy-MM-dd"));
+    }
+    return o;
+}
+
+QString AiService::relationshipText()
+{
+    QJsonObject o = readRelationship();
+    int itm = o.value("intimacy").toInt();
+    int tr = o.value("trust").toInt();
+    int days = o.value("interaction_days").toInt();
+    QString level;
+    if (itm < 20) level = "刚认识";
+    else if (itm < 40) level = "逐渐熟悉";
+    else if (itm < 60) level = "好朋友";
+    else if (itm < 80) level = "很亲近";
+    else level = "形影不离";
+    return QString("我们认识约%1天，现在是%2的关系（亲密度%3/信任度%4）。保持这个关系连续性，不要每次像第一次认识。")
+        .arg(days).arg(level).arg(itm).arg(tr);
+}
+
+void AiService::bumpRelationship(int intimacyDelta, int trustDelta)
+{
+    QJsonObject o = readRelationship();
+    int itm = qBound(0, o.value("intimacy").toInt() + intimacyDelta, 100);
+    int tr = qBound(0, o.value("trust").toInt() + trustDelta, 100);
+    int days = o.value("interaction_days").toInt();
+    QString today = QDate::currentDate().toString("yyyy-MM-dd");
+    QString last = o.value("last_date").toString();
+    if (last != today) {
+        days++;
+        o.insert("last_date", today);
+    }
+    o.insert("intimacy", itm);
+    o.insert("trust", tr);
+    o.insert("interaction_days", days);
+    QDir().mkpath(ContactService::instance().contactDir(ContactService::instance().currentId()));
+    QFile f(relationshipPathB());
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(QJsonDocument(o).toJson());
+        f.close();
+    }
+}

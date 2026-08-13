@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.2"
+                        text: "小钦的工具 v3.5.3"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -975,20 +975,24 @@ ApplicationWindow {
         interval: 30000
         repeat: true
         onTriggered: {
-            // Smart companion triggers:
-            //  - Minecraft foreground -> chat after ~1 min (keys always pressed in game)
-            //  - late night (23-05) -> lower the idle threshold for more company
-            //  - otherwise -> 8 min of real idle
-            //  - very long away (>30 min) -> also chat ("回来啦")
+            // Smart companion triggers (consider busy state, software, time,
+            // recent chat, unfinished topics):
+            //  - coding / busy foreground -> never interrupt
+            //  - Minecraft foreground -> low-freq company (~1 min)
+            //  - late night -> gentle company (4 min idle)
+            //  - otherwise -> 8 min real idle
+            //  - long away (>30 min) -> wait and greet on return
+            var state = aiService.userActivityState()
             var nowIdleMs = aiService.lastInputMs()
             if (nowIdleMs < 0) nowIdleMs = Date.now() - root.lastInteraction
             // once the user is active again (idle < 2 min), allow a future idle chat
             if (nowIdleMs < 2 * 60 * 1000)
                 root.idleChatDone = false
 
-            if (!root.idleChatDone) {
+            if (!root.idleChatDone && state !== "coding") {
                 var shouldChat = false
-                if (aiService.isForegroundMinecraft()) {
+                if (state === "gaming") {
+                    // low-freq company while gaming; still respect a cool-down
                     if (!root.lastIdleChatAt || Date.now() - root.lastIdleChatAt >= 60 * 1000)
                         shouldChat = true
                 } else {
