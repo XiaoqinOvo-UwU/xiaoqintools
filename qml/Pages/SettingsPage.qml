@@ -410,7 +410,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小钦的工具 v3.5.14 · 泉此方天下第一"
+                text: "小钦的工具 v3.5.15 · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
             }
