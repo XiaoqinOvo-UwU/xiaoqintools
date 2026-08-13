@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.9"
+                        text: "小钦的工具 v3.5.10"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -625,20 +625,17 @@ ApplicationWindow {
                 }
                 Text { text: "AI 人设"; color: Theme.textDim; font.pixelSize: 12 }
                 // fixed-height text area: content scrolls inside instead of
-                // growing the dialog (long personas no longer stretch the window).
-                // implicitHeight is pinned so the layout can never be pushed open.
+                // growing the dialog (long personas no longer stretch the window)
                 TextArea {
                     id: profileAiPersonality
                     Layout.fillWidth: true
                     Layout.preferredHeight: 160
                     Layout.minimumHeight: 80
                     Layout.maximumHeight: 240
-                    implicitHeight: 160
                     color: Theme.text
                     text: aiService.aiPersonality()
                     wrapMode: TextEdit.Wrap
                     background: Rectangle { color: Theme.inputBg; radius: 8 }
-                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -909,7 +906,7 @@ ApplicationWindow {
         }
     }
 
-    // ================= AI STATE DIALOG (friendly sliders/combos, no JSON) =================
+    // ================= AI STATE DIALOG =================
     Dialog {
         id: aiStateDialog
         width: 440
@@ -953,13 +950,14 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: 10
                 Slider {
+                    id: tendernessSlider
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
-                    value: aiService.tenderness()
-                    onValueChanged: aiService.setTenderness(value)
+                    Component.onCompleted: value = aiService.stateInt("tenderness")
+                    onValueChanged: aiService.setStateInt("tenderness", value)
                 }
                 Text {
-                    text: aiService.tenderness()
+                    text: tendernessSlider.value
                     color: Theme.textDim
                     font.pixelSize: 12
                     Layout.preferredWidth: 30
@@ -973,13 +971,14 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: 10
                 Slider {
+                    id: energySlider
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
-                    value: aiService.energy()
-                    onValueChanged: aiService.setEnergy(value)
+                    Component.onCompleted: value = aiService.stateInt("energy")
+                    onValueChanged: aiService.setStateInt("energy", value)
                 }
                 Text {
-                    text: aiService.energy()
+                    text: energySlider.value
                     color: Theme.textDim
                     font.pixelSize: 12
                     Layout.preferredWidth: 30
@@ -993,13 +992,14 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: 10
                 Slider {
+                    id: companionSlider
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
-                    value: aiService.companion()
-                    onValueChanged: aiService.setCompanion(value)
+                    Component.onCompleted: value = aiService.stateInt("companion")
+                    onValueChanged: aiService.setStateInt("companion", value)
                 }
                 Text {
-                    text: aiService.companion()
+                    text: companionSlider.value
                     color: Theme.textDim
                     font.pixelSize: 12
                     Layout.preferredWidth: 30
@@ -1012,23 +1012,17 @@ ApplicationWindow {
             ComboBox {
                 id: moodCombo
                 Layout.fillWidth: true
-                model: [
-                    { text: "平静", value: "calm" },
-                    { text: "开心", value: "happy" },
-                    { text: "温柔", value: "gentle" },
-                    { text: "低落", value: "low" },
-                    { text: "活跃", value: "active" }
-                ]
-                textRole: "text"
-                valueRole: "value"
+                model: ["平静", "开心", "温柔", "低落", "活跃"]
+                property var moodValues: ["calm", "happy", "gentle", "low", "active"]
                 Component.onCompleted: {
-                    for (var i = 0; i < model.length; i++)
-                        if (model[i].value === aiService.moodText()) { currentIndex = i; break }
+                    var cur = aiService.stateStr("mood")
+                    for (var i = 0; i < moodValues.length; i++)
+                        if (moodValues[i] === cur) { currentIndex = i; break }
                 }
                 onActivated: {
                     var idx = moodCombo.currentIndex
-                    var m = moodCombo.model[idx]
-                    aiService.setMoodText(m.value)
+                    if (idx >= 0 && idx < moodCombo.moodValues.length)
+                        aiService.setStateStr("mood", moodCombo.moodValues[idx])
                 }
             }
 
@@ -1037,21 +1031,17 @@ ApplicationWindow {
             ComboBox {
                 id: styleCombo
                 Layout.fillWidth: true
-                model: [
-                    { text: "简短", value: "short" },
-                    { text: "自然", value: "natural" },
-                    { text: "详细", value: "detailed" }
-                ]
-                textRole: "text"
-                valueRole: "value"
+                model: ["简短", "自然", "详细"]
+                property var styleValues: ["short", "natural", "detailed"]
                 Component.onCompleted: {
-                    for (var j = 0; j < model.length; j++)
-                        if (model[j].value === aiService.replyStyle()) { currentIndex = j; break }
+                    var cur2 = aiService.stateStr("reply_style")
+                    for (var j = 0; j < styleValues.length; j++)
+                        if (styleValues[j] === cur2) { currentIndex = j; break }
                 }
                 onActivated: {
                     var idx2 = styleCombo.currentIndex
-                    var m2 = styleCombo.model[idx2]
-                    aiService.setReplyStyle(m2.value)
+                    if (idx2 >= 0 && idx2 < styleCombo.styleValues.length)
+                        aiService.setStateStr("reply_style", styleCombo.styleValues[idx2])
                 }
             }
 
