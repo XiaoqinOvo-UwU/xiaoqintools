@@ -15,6 +15,10 @@
 #include <QTimer>
 #include <QRegularExpression>
 #include <QNetworkProxy>
+#include <QEventLoop>
+#include <QElapsedTimer>
+#include <QFutureWatcher>
+#include <QtConcurrent>
 
 UpdateService::UpdateService(QObject *parent)
     : QObject(parent)
@@ -128,9 +132,6 @@ void UpdateService::checkForUpdates()
 void UpdateService::downloadAndInstall()
 {
     if (m_downloading || m_url.isEmpty()) return;
-    m_downloading = true;
-    m_progress = 0;
-    emit downloadStateChanged();
 
     // target dir: %TEMP%/XiaoQinToolsUpdate
     QString dir = QDir::temp().filePath("XiaoQinToolsUpdate");
@@ -139,8 +140,104 @@ void UpdateService::downloadAndInstall()
     if (fileName.isEmpty()) fileName = "update.exe";
     QString dest = dir + "/" + fileName;
 
+    // pick the fastest source (GitHub direct + mirrors), then download from it.
+    // Run the speed probe off the UI thread so the window doesn't freeze.
+    QStringList mirrors = mirrorUrls(m_url);
+    m_downloading = true;
+    m_progress = 0;
+    emit downloadStateChanged();
+    auto *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, dest]() {
+        QString fast = watcher->result();
+        watcher->deleteLater();
+        if (fast.isEmpty())
+            emit downloadFinished(false, "所有下载源均不可用，请检查网络或代理");
+        else
+            startDownload(fast, dest);
+    });
+    QFuture<QString> future = QtConcurrent::run([mirrors, this]() {
+        return pickFastest(mirrors, 512 * 1024, 5000); // probe 512KB, 5s cap per source
+    });
+    watcher->setFuture(future);
+}
+
+// ---- build mirror URLs for a canonical GitHub release download URL ----
+QStringList UpdateService::mirrorUrls(const QString &canonical) const
+{
+    QStringList out;
+    out << canonical; // official GitHub first
+    // public GitHub proxy mirrors (fastest one is picked by the speed test)
+    const QStringList prefix = {
+        "https://ghproxy.net/",
+        "https://gh-proxy.com/",
+        "https://mirror.ghproxy.com/",
+        "https://ghfast.top/",
+        "https://ghproxy.cc/",
+    };
+    for (const QString &p : prefix)
+        out << p + canonical;
+    return out;
+}
+
+// ---- probe each candidate URL with a small ranged request, return the fastest ----
+QString UpdateService::pickFastest(const QStringList &urls, int probeBytes, int timeoutMs)
+{
+    // Runs on a worker thread: use a local manager (no parent) so we don't touch
+    // the main-thread m_mgr from another thread.
+    QNetworkAccessManager mgr;
+    ProxyService probe;
+    if (probe.isClashPortOpen())
+        mgr.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, "127.0.0.1", 7897));
+    else if (probe.isV2rayPortOpen())
+        mgr.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, "127.0.0.1", 10808));
+    else
+        mgr.setProxy(QNetworkProxy(QNetworkProxy::NoProxy));
+
+    QString best;
+    double bestSpeed = -1.0;
+    for (const QString &u : urls) {
+        QNetworkRequest req;
+        req.setUrl(QUrl(u));
+        req.setRawHeader("User-Agent", "XiaoQinTools");
+        // request only the first probeBytes via a Range header
+        req.setRawHeader("Range", QString("bytes=0-%1").arg(probeBytes - 1).toUtf8());
+
+        QEventLoop loop;
+        QElapsedTimer t;
+        t.start();
+        QNetworkReply *rep = mgr.get(req);
+        qint64 got = 0;
+        QObject::connect(rep, &QNetworkReply::readyRead, &loop, [&got, rep]() {
+            got += rep->readAll().size();
+        });
+        QObject::connect(rep, &QNetworkReply::finished, &loop, [&loop, rep]() {
+            rep->deleteLater();
+            loop.quit();
+        });
+        QTimer::singleShot(timeoutMs, &loop, &QEventLoop::quit);
+        loop.exec();
+
+        qint64 ms = t.elapsed();
+        rep->abort();
+        rep->deleteLater();
+        if (ms <= 0 || got <= 0) continue; // unreachable or nothing received
+        double speed = (double)got * 1000.0 / (double)ms; // bytes/sec
+        if (speed > bestSpeed) {
+            bestSpeed = speed;
+            best = u;
+        }
+    }
+    return best;
+}
+
+// ---- actually download from the chosen URL and finish the update flow ----
+void UpdateService::startDownload(const QString &url, const QString &dest)
+{
+    m_downloading = true;
+    m_progress = 0;
+    emit downloadStateChanged();
+
     if (!m_mgr) m_mgr = new QNetworkAccessManager(this);
-    // same proxy routing as the check request
     ProxyService probe;
     if (probe.isClashPortOpen())
         m_mgr->setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, "127.0.0.1", 7897));
@@ -149,7 +246,7 @@ void UpdateService::downloadAndInstall()
     else
         m_mgr->setProxy(QNetworkProxy(QNetworkProxy::NoProxy));
     QNetworkRequest req;
-    req.setUrl(QUrl(m_url));
+    req.setUrl(QUrl(url));
     req.setRawHeader("User-Agent", "XiaoQinTools");
     QNetworkReply *reply = m_mgr->get(req);
     QFile *out = new QFile(dest);

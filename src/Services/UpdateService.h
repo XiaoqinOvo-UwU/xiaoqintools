@@ -38,10 +38,15 @@ signals:
 private:
     static bool versionGreater(const QString &remote, const QString &local);
     void parseLatestRelease(const QByteArray &json);
+    // build a list of mirror URLs from the canonical GitHub download URL
+    QStringList mirrorUrls(const QString &canonical) const;
+    // pick the fastest mirror by probing each with a small ranged request
+    QString pickFastest(const QStringList &urls, int probeBytes, int timeoutMs);
+    void startDownload(const QString &url, const QString &dest);
 
     bool m_available = false;
     QString m_latest;
-    QString m_url;              // exe asset download url (public GitHub, direct)
+    QString m_url;              // canonical GitHub asset download url
     bool m_downloading = false;
     int m_progress = 0;
     QNetworkAccessManager *m_mgr = nullptr;
