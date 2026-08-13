@@ -1,6 +1,7 @@
 #pragma once
 #include <QString>
 #include <QJsonObject>
+#include <QtGlobal>
 
 // Load/save app config to a JSON file in the user config dir.
 // Ported concept from the WinForms AppConfig (base_url / model / api_key / proxy paths).

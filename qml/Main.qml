@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.7"
+                        text: "小钦的工具 v3.5.8"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -553,7 +553,7 @@ ApplicationWindow {
     Dialog {
         id: aiProfileDialog
         width: 440
-        height: Math.min(560, profileCol.implicitHeight + 110)
+        height: 600
         modal: true
         x: (root.width - width) / 2
         y: (root.height - height) / 2
@@ -624,11 +624,14 @@ ApplicationWindow {
                     background: Rectangle { color: Theme.inputBg; radius: 8 }
                 }
                 Text { text: "AI 人设"; color: Theme.textDim; font.pixelSize: 12 }
+                // fixed-height text area: content scrolls inside instead of
+                // growing the dialog (long personas no longer stretch the window)
                 TextArea {
                     id: profileAiPersonality
                     Layout.fillWidth: true
-                    // grow with content so long personas are fully visible & editable
-                    implicitHeight: Math.max(90, contentHeight + 20)
+                    Layout.preferredHeight: 160
+                    Layout.minimumHeight: 80
+                    Layout.maximumHeight: 240
                     color: Theme.text
                     text: aiService.aiPersonality()
                     wrapMode: TextEdit.Wrap
@@ -748,21 +751,21 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "📝 用户笔记（你告诉过我的事）"
-                    onClicked: { memoryCat.open("笔记", aiService.notesText(), false) }
+                    onClicked: { memoryCat.openCat("笔记", aiService.notesText(), false) }
                 }
                 // 共同经历
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "📌 共同经历（事件记忆）"
-                    onClicked: { memoryCat.open("共同经历", aiService.eventMemoryText(50), false) }
+                    onClicked: { memoryCat.openCat("共同经历", aiService.eventMemoryText(50), false) }
                 }
                 // 人格
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "🎭 人格（性格特质与风格，可编辑）"
-                    onClicked: { memoryCat.open("人格", aiService.personalityRaw(), true) }
+                    onClicked: { memoryCat.openCat("人格", aiService.personalityRaw(), true) }
                 }
                 // 关系
                 AppButton {
@@ -772,7 +775,7 @@ ApplicationWindow {
                     onClicked: {
                         // editable as {"intimacy":..,"trust":..}
                         var json = '{\n  "intimacy": 70,\n  "trust": 80\n}'
-                        memoryCat.open("关系", json, true)
+                        memoryCat.openCat("关系", json, true)
                     }
                 }
                 // AI 状态
@@ -780,28 +783,28 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "⚡ AI 状态（心情与精力，可编辑）"
-                    onClicked: { memoryCat.open("AI状态", aiService.aiStateJson(), true) }
+                    onClicked: { memoryCat.openCat("AI状态", aiService.aiStateJson(), true) }
                 }
                 // 兴趣
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "⭐ 我的兴趣（可编辑）"
-                    onClicked: { memoryCat.open("兴趣", aiService.interestsRaw(), true) }
+                    onClicked: { memoryCat.openCat("兴趣", aiService.interestsRaw(), true) }
                 }
                 // 未完成话题
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "💬 未完成话题（可编辑）"
-                    onClicked: { memoryCat.open("未完成话题", aiService.unfinishedRaw(), true) }
+                    onClicked: { memoryCat.openCat("未完成话题", aiService.unfinishedRaw(), true) }
                 }
                 // 使用时长
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "⏱ 使用时长"
-                    onClicked: { memoryCat.open("时长", aiService.usageText(), false) }
+                    onClicked: { memoryCat.openCat("时长", aiService.usageText(), false) }
                 }
             }
         }
@@ -824,7 +827,7 @@ ApplicationWindow {
             border.color: Theme.glassBorder
             border.width: 1
         }
-        function open(title, content, edit, rel) {
+        function openCat(title, content, edit, rel) {
             memoryCat.catTitle = title
             memoryCat.editable = edit
             memoryCat.isRelationship = rel || false
