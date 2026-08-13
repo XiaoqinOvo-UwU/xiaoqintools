@@ -10,6 +10,7 @@ install-test2/
 zip-test/
 zip-install/
 install-check/
+resources/resources/
 *.json
 *.txt
 installer/*.exe

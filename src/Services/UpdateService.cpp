@@ -98,7 +98,7 @@ void UpdateService::parseLatestRelease(const QByteArray &data)
 void UpdateService::checkForUpdates()
 {
     // GitHub releases API (public repo, no token needed for read).
-    QString api = "https://api.github.com/repos/xiaoqinnb666/xiaoqintools/releases/latest";
+    QString api = "https://api.github.com/repos/XiaoqinOvo-UwU/xiaoqintools/releases/latest";
 
     if (!m_mgr) m_mgr = new QNetworkAccessManager(this);
     // GitHub needs a proxy in CN. Route through Clash(7897)/v2rayN(10808) when reachable.
