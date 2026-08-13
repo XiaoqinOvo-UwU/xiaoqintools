@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.3.10"
+                        text: "小钦的工具 v3.4.0"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -973,7 +973,11 @@ ApplicationWindow {
         interval: 30000
         repeat: true
         onTriggered: {
-            var idleMs = Date.now() - root.lastInteraction
+            // system-wide idle time (ms since last keyboard/mouse input anywhere),
+            // not just window focus — the old focus-based check fired even while
+            // the user was actively typing in the app.
+            var idleMs = aiService.lastInputMs()
+            if (idleMs < 0) idleMs = Date.now() - root.lastInteraction
             if (idleMs >= 10 * 60 * 1000 && !root.idleChatDone) {
                 if (!aiService.isGameRunning()) {
                     root.idleChatDone = true

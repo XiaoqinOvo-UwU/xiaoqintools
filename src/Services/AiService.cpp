@@ -418,6 +418,23 @@ bool AiService::isGameRunning()
     return false;
 }
 
+// ---- system-wide idle: ms since the last keyboard/mouse input ----
+qint64 AiService::lastInputMs()
+{
+#ifdef Q_OS_WIN
+    LASTINPUTINFO lii;
+    lii.cbSize = sizeof(LASTINPUTINFO);
+    if (!GetLastInputInfo(&lii)) return -1;
+    // GetTickCount wraps at ~49 days; guard against a stale read
+    DWORD now = GetTickCount();
+    DWORD delta = now - lii.dwTime; // unsigned wraps safely
+    if (delta > 3600u * 24 * 1000) return -1; // > 1 day: treat as unknown
+    return static_cast<qint64>(delta);
+#else
+    return -1;
+#endif
+}
+
 // ---- light-weight process snapshot (only for idle chat, runs in background) ----
 static QString processSnapshot()
 {
@@ -741,6 +758,18 @@ void AiService::appendNote(const QString &note)
     m_chatBuffer.clear(); // fresh window
 }
 
+// ---- seed recent-chat context from the UI (SQLite history on page open) ----
+void AiService::setChatHistory(const QString &history)
+{
+    // split on newlines; each line is one message already formatted by the UI
+    m_chatBuffer.clear();
+    const QStringList lines = history.split('\n', Qt::SkipEmptyParts);
+    for (const QString &l : lines)
+        m_chatBuffer.append(l.trimmed());
+    while (m_chatBuffer.size() > 24)
+        m_chatBuffer.removeFirst();
+}
+
 // ---- DeepSeek chat (AIRI-style: bucketed context + time prefix + emotion tokens) ----
 void AiService::sendMessage(const QString &text)
 {
@@ -776,9 +805,14 @@ void AiService::sendMessage(const QString &text)
         ctx << "- activity: " + act;
     QString contextBlock = "[Context]\n" + ctx.join("\n");
 
+    // recent conversation history so the AI can see what was said before
+    QString historyBlock;
+    if (!m_chatBuffer.isEmpty())
+        historyBlock = "\n[Recent chat]\n" + m_chatBuffer.join("\n");
+
     // time prefix on the user message (KV-cache friendly)
     QString userMsg = "[" + QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm") + "] "
-                      + text + "\n" + contextBlock;
+                      + text + "\n" + contextBlock + historyBlock;
 
     auto *watcher = new QFutureWatcher<QString>(this);
     connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, userForMemory]() {

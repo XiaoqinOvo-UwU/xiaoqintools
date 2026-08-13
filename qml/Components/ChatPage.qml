@@ -27,8 +27,15 @@ Rectangle {
             tx.executeSql("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, contact TEXT, isAi INTEGER, msg TEXT)")
             var rs = tx.executeSql("SELECT isAi, msg FROM messages WHERE contact=? ORDER BY id", [contactId])
             msgModel.clear()
-            for (var i = 0; i < rs.rows.length; i++)
-                msgModel.append({ "isAi": rs.rows.item(i).isAi === 1, "msg": rs.rows.item(i).msg })
+            var hist = []
+            for (var i = 0; i < rs.rows.length; i++) {
+                var isAi = rs.rows.item(i).isAi === 1
+                var msg = rs.rows.item(i).msg
+                msgModel.append({ "isAi": isAi, "msg": msg })
+                hist.push((isAi ? aiService.aiName() : (aiService.userName() || "用户")) + ": " + msg)
+            }
+            // seed AI context with this conversation so it can see past messages
+            aiService.setChatHistory(hist.join("\n"))
         })
         // if this contact has no history yet, show a greeting bubble
         if (msgModel.count === 0)

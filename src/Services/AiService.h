@@ -18,11 +18,13 @@ public:
     Q_INVOKABLE bool shouldGreetToday();     // only greet on the first launch of the day
     Q_INVOKABLE void markGreeted();          // record today as greeted
     Q_INVOKABLE void sendMessage(const QString &text); // async chat -> chatReply
+    Q_INVOKABLE void setChatHistory(const QString &history); // seed recent-chat context (from UI/SQLite)
     Q_INVOKABLE QString memoryReport();      // what the AI remembers (for settings/tests)
     Q_INVOKABLE QString uptimeText();        // how long the PC has been on
     Q_INVOKABLE void generateGreeting();     // async: DeepSeek writes greeting -> greetingReady
     Q_INVOKABLE bool isGameRunning();        // detects r5apex / minecraft etc.
     Q_INVOKABLE void idleChat();             // async: AI initiates a topic -> chatReply
+    Q_INVOKABLE qint64 lastInputMs();        // ms since the last keyboard/mouse input system-wide
 
     // user profile passthrough (stored in config)
     Q_INVOKABLE QString userName();
