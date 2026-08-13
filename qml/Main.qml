@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.15"
+                        text: "小钦的工具 v3.5.16"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -1057,22 +1057,6 @@ ApplicationWindow {
                     onValueChanged: aiService.setPersonaTrait("成熟", value)
                 }
                 Text { text: traitMature.value; color: Theme.textDim; font.pixelSize: 11 }
-            }
-            Text { text: "回复风格"; color: Theme.textDim; font.pixelSize: 12 }
-            ComboBox {
-                id: personaStyleCombo
-                Layout.fillWidth: true
-                model: ["自然", "简短", "详细"]
-                Component.onCompleted: {
-                    var s = aiService.personaStyle("回复长度")
-                    if (s === "简短") currentIndex = 1
-                    else if (s === "详细") currentIndex = 2
-                    else currentIndex = 0
-                }
-                onActivated: {
-                    var styles = ["自然", "简短", "详细"]
-                    aiService.setPersonaStyle("回复长度", styles[currentIndex])
-                }
             }
             Text {
                 Layout.fillWidth: true

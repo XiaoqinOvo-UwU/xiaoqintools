@@ -395,26 +395,32 @@ Rectangle {
     // human-like reply delay: wait "typing time" proportional to text length,
     // then reveal the full reply at once. Each reply is processed one after
     // another; rapid consecutive messages never cancel an earlier reply.
+    // Multi-line replies are split into separate short bubbles (like chat apps).
     function appendAi(text) {
-        // one placeholder per reply: only add a new "..." bubble when there is
-        // no pending placeholder to fill, otherwise consecutive AI messages
-        // (e.g. proactive idle chats) would overwrite each other.
-        var hasPlaceholder = false
-        for (var i = 0; i < msgModel.count; i++) {
-            if (msgModel.get(i).isAi && msgModel.get(i).msg === "...") {
-                hasPlaceholder = true
-                break
+        // split into lines (trim empty), each becomes its own bubble
+        var parts = text.split(/\r?\n/).map(function(s) { return s.trim() }).filter(function(s) { return s.length > 0 })
+        if (parts.length === 0) parts = [text]
+
+        // for each part: ensure a placeholder bubble, then queue it
+        for (var p = 0; p < parts.length; p++) {
+            // find an existing "..." placeholder bubble to reuse
+            var hasPlaceholder = false
+            for (var i = 0; i < msgModel.count; i++) {
+                if (msgModel.get(i).isAi && msgModel.get(i).msg === "...") {
+                    hasPlaceholder = true
+                    break
+                }
             }
+            if (!hasPlaceholder) {
+                msgModel.append({ "isAi": true, "msg": "..." })
+                Qt.callLater(function() { msgView.positionViewAtEnd() })
+            }
+            // typing speed ~ 120ms per char, clamp to 1.5s ~ 12s
+            var ms = Math.round(parts[p].length * 120)
+            ms = Math.max(1500, Math.min(ms, 12000))
+            replyQueue.push({ "text": parts[p], "ms": ms })
         }
-        if (!hasPlaceholder) {
-            msgModel.append({ "isAi": true, "msg": "..." })
-            Qt.callLater(function() { msgView.positionViewAtEnd() })
-        }
-        // typing speed ~ 120ms per char, clamp to 1.5s ~ 12s
-        var ms = Math.round(text.length * 120)
-        ms = Math.max(1500, Math.min(ms, 12000))
         setHeaderStatus(aiService.aiName() + " 正在输入...")
-        replyQueue.push({ "text": text, "ms": ms })
         pumpReplies()
     }
 
