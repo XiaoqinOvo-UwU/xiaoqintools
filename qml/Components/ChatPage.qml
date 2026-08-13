@@ -241,6 +241,21 @@ Rectangle {
             clip: true
             spacing: 8
             model: msgModel
+            // track whether the user is pinned to the bottom (so we don't yank
+            // the view away while they scroll up through history)
+            property bool stickToBottom: true
+            onContentYChanged: {
+                // if user scrolled away from bottom, stop auto-following
+                if (contentHeight - contentY - height > 40)
+                    stickToBottom = false
+                else
+                    stickToBottom = true
+            }
+            // when content grows (new/multi-line message), follow only if pinned
+            onContentHeightChanged: {
+                if (stickToBottom)
+                    Qt.callLater(function() { positionViewAtEnd() })
+            }
             delegate: Rectangle {
                 id: delegateRoot
                 width: msgView.width

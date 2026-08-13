@@ -577,13 +577,13 @@ void AiService::idleChat()
         QString procs = processSnapshot();
         QStringList ctx;
         if (!state.isEmpty())
-            ctx << "- 用户当前状态：" + state;
+            ctx << "- 用户当前状态[真实读取]：" + state;
         if (!activity.isEmpty() && !activity.startsWith("（"))
-            ctx << "- 用户今天大部分时间在：" + activity;
+            ctx << "- 用户今天早些时候的统计(历史，不代表现在)：" + activity;
         if (!fg.isEmpty())
-            ctx << "- 用户当前正在使用：" + fg;
+            ctx << "- 用户当前前台窗口[真实读取]：" + fg;
         if (!procs.isEmpty())
-            ctx << "- 用户电脑正在运行的进程（节选）：" + procs;
+            ctx << "- 用户电脑正在运行的进程[真实读取，节选]：" + procs;
         QString recentBlock;
         if (!recent.isEmpty())
             recentBlock = "\n你们最近聊的：\n" + recent + "\n";
@@ -600,6 +600,9 @@ void AiService::idleChat()
             + "【我们的关系】" + relationshipText() + "\n"
             + ctx.join("\n")
             + recentBlock + topicsBlock + interestBlock + eventsBlock
+            + "\n【事实来源分级】你唯一能确定的用户信息来自：①用户说过的话；②上面标[真实读取]的数据。"
+              "没有来源的用户行为描述一律禁止，绝不能说'我看到你''你玩了X小时'，除非上面明确给出。"
+              "不确定就用'感觉''是不是''我猜'，或干脆不提。宁可少说，不可编造。\n"
             + "\n请结合上面信息主动找个话题和ta聊一句：优先延续未完成的话题，其次是共同经历和兴趣，"
               "自然得像老朋友提起，不要说'根据记忆'。"
               "如果用户深夜还没睡，语气更温柔；如果用户在打游戏，轻松提一句别啰嗦；"
@@ -784,7 +787,7 @@ void AiService::addMemoryNote(const QString &note)
         for (int i = notes.size() - 99; i < notes.size(); i++) kept.append(notes.at(i));
         notes = kept;
     }
-    notes.append(n + "（" + QDate::currentDate().toString("yyyy-MM-dd") + "）");
+    notes.append(n + "（" + QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm") + "）");
     o.insert("notes", notes);
     writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
 }
@@ -859,7 +862,7 @@ void AiService::appendNote(const QString &note)
         for (int i = notes.size() - 99; i < notes.size(); i++) kept.append(notes.at(i));
         notes = kept;
     }
-    notes.append(note + "（" + QDate::currentDate().toString("yyyy-MM-dd") + "）");
+    notes.append(note + "（" + QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm") + "）");
     o.insert("notes", notes);
     writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
     m_userTurns = 0;      // restart the counting window
@@ -936,6 +939,12 @@ void AiService::sendMessage(const QString &text)
         + "重要：不要机械复述或回显用户的原话，不要反复引用同一句话。"
           "在回应中自然承接上一句，但补充新角度、新细节、新问题，让对话自然延续而非原地打转。"
           "如果用户重复提起同一个话题，简短回应后自然地延伸到新的相关话题。\n"
+        + "【事实来源分级——极其重要】\n"
+          "你唯一能确定的用户信息来自：①用户明确说过的话；②下方[Context]中标记为[真实读取]的数据。\n"
+          "Level 1 确定事实：只可使用上面两种来源，可直接陈述。\n"
+          "Level 2 合理推测：如果只是基于时间/习惯的猜测，必须用'感觉''是不是''我猜''好像'等疑问或推测语气，不能当成事实陈述。\n"
+          "Level 3 禁止：没有任何来源的用户行为描述一律禁止生成。绝不能说'我看到你''刚刚你''你玩了X小时'这类话，除非[Context]明确给出。\n"
+          "规则：宁可少说，不可编造。不确定的信息就问，不要假装知道。\n"
         + "当前策略：" + strategy + "\n"
         + "情绪表达：回复开头用一个情绪令牌表示你此刻的情绪，例如 <|ACT {\"emotion\":\"happy\"}|>；"
           "若中途情绪变化，在变化处再插一个令牌；需要停顿节奏时可插入 <|DELAY 1|>（数字为秒）。"
@@ -943,14 +952,13 @@ void AiService::sendMessage(const QString &text)
           "令牌不会显示给用户，不要解释它们。\n"
         // companion: event memory makes the AI a persistent partner,
         // not a fresh chatbot every session
-        + "【我记得的共同经历】\n" + (eventMemoryText(5).isEmpty() ? QString("（还没有太多回忆，慢慢积累）") : eventMemoryText(5))
-        + "\n【你感兴趣的事】\n" + (interestsText(4).isEmpty() ? QString("（还在慢慢了解你）") : interestsText(4))
+        + "【我记得的共同经历】（以下是你确实知道的事，只能引用这些，不许编造）\n" + (eventMemoryText(5).isEmpty() ? QString("（还没有太多回忆，慢慢积累）") : eventMemoryText(5))
+        + "\n【你感兴趣的事】（来自你的聊天，是历史记录）\n" + (interestsText(4).isEmpty() ? QString("（还在慢慢了解你）") : interestsText(4))
         + "\n【还没聊完的话题】\n" + (unfinishedTopicsText(3).isEmpty() ? QString("（暂无）") : unfinishedTopicsText(3))
         + "\n【我此刻的状态】" + aiStateJson();
 
     // Bucket 2: memory + current state, flattened bullet list.
-    // Keep memory small (last few core notes) so we don't flood the prompt and
-    // cause the model to echo the user's own words back at them.
+    // Only data tagged [真实读取] is a verified fact; the rest is history or guess.
     QStringList ctx;
     if (!mem.isEmpty() && mem != "{}") {
         QStringList shortMem;
@@ -959,15 +967,15 @@ void AiService::sendMessage(const QString &text)
         int maxLines = qMin(memLines.size(), 12);
         for (int i = 0; i < maxLines; i++)
             shortMem << memLines.at(i);
-        ctx << "- memory: " + shortMem.join(" ");
+        ctx << "- memory(历史笔记，不确定是否仍准确): " + shortMem.join(" ");
     }
-    ctx << "- state: " + analyzeUserState();
+    ctx << "- state[真实读取]: " + analyzeUserState();
     QString fg = foregroundApp();
     if (!fg.isEmpty())
-        ctx << "- app: 用户现在正在使用 " + fg;
+        ctx << "- app[真实读取]: 用户当前前台窗口是 " + fg;
     QString act = activitySummary();
     if (!act.isEmpty() && !act.startsWith("（"))
-        ctx << "- activity: " + act;
+        ctx << "- activity(历史聚合，今天早些时候的统计，不代表现在): " + act;
     QString contextBlock = "[Context]\n" + ctx.join("\n");
 
     // recent conversation history so the AI can see what was said before
@@ -1453,7 +1461,7 @@ void AiService::trackUnfinishedTopic(const QString &topic, int importance)
     QJsonObject entry;
     entry.insert("topic", t);
     entry.insert("importance", importance);
-    entry.insert("last_time", QDate::currentDate().toString("MM-dd"));
+    entry.insert("last_time", QDateTime::currentDateTime().toString("MM-dd HH:mm"));
     entry.insert("status", "unfinished");
     kept.prepend(entry);
     if (kept.size() > 20) { // bound
