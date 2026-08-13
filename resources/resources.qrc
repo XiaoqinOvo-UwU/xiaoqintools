@@ -3,6 +3,7 @@
         <file>../qml/Main.qml</file>
         <file>../qml/Components/ActionCard.qml</file>
         <file>../qml/Components/AppButton.qml</file>
+        <file>../qml/Components/DarkSlider.qml</file>
         <file>../qml/Components/IslandToast.qml</file>
         <file>../qml/Components/ChatPage.qml</file>
         <file>../qml/Components/ReportDialog.qml</file>

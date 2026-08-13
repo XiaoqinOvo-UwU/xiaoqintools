@@ -25,6 +25,11 @@ QtObject {
     readonly property color warn:        "#C9A15A"
     readonly property color danger:      "#C55A5A"
 
+    // ---- slider ----
+    readonly property color sliderTrack: "#33383F"
+    readonly property color sliderFill:  "#5FA87A"
+    readonly property color sliderHandle:"#E8E8E8"
+
     // ---- glass (frosted, subtle grey) ----
     readonly property color glass:       Qt.rgba(255,255,255,0.04)
     readonly property color glassHover:  Qt.rgba(255,255,255,0.09)

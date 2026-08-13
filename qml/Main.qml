@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.11"
+                        text: "小钦的工具 v3.5.12"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -997,7 +997,7 @@ ApplicationWindow {
             Text { text: "温柔"; color: Theme.textDim; font.pixelSize: 12 }
             RowLayout {
                 Layout.fillWidth: true
-                Slider {
+                DarkSlider {
                     id: traitGentle
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
@@ -1009,7 +1009,7 @@ ApplicationWindow {
             Text { text: "傲娇"; color: Theme.textDim; font.pixelSize: 12 }
             RowLayout {
                 Layout.fillWidth: true
-                Slider {
+                DarkSlider {
                     id: traitTsun
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
@@ -1021,7 +1021,7 @@ ApplicationWindow {
             Text { text: "幽默"; color: Theme.textDim; font.pixelSize: 12 }
             RowLayout {
                 Layout.fillWidth: true
-                Slider {
+                DarkSlider {
                     id: traitHumor
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
@@ -1033,7 +1033,7 @@ ApplicationWindow {
             Text { text: "依赖"; color: Theme.textDim; font.pixelSize: 12 }
             RowLayout {
                 Layout.fillWidth: true
-                Slider {
+                DarkSlider {
                     id: traitCling
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
@@ -1045,7 +1045,7 @@ ApplicationWindow {
             Text { text: "成熟"; color: Theme.textDim; font.pixelSize: 12 }
             RowLayout {
                 Layout.fillWidth: true
-                Slider {
+                DarkSlider {
                     id: traitMature
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
@@ -1104,7 +1104,7 @@ ApplicationWindow {
             Text { text: "亲密度"; color: Theme.textDim; font.pixelSize: 12 }
             RowLayout {
                 Layout.fillWidth: true
-                Slider {
+                DarkSlider {
                     id: relIntimacy
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
@@ -1116,7 +1116,7 @@ ApplicationWindow {
             Text { text: "信任度"; color: Theme.textDim; font.pixelSize: 12 }
             RowLayout {
                 Layout.fillWidth: true
-                Slider {
+                DarkSlider {
                     id: relTrust
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
@@ -1127,7 +1127,17 @@ ApplicationWindow {
             }
             Text {
                 Layout.fillWidth: true
-                text: aiService.relationshipText()
+                // live text: recomputes whenever the sliders move
+                text: {
+                    var itm = relIntimacy.value
+                    var tr = relTrust.value
+                    var level = "刚认识"
+                    if (itm >= 80) level = "形影不离"
+                    else if (itm >= 60) level = "很亲近"
+                    else if (itm >= 40) level = "好朋友"
+                    else if (itm >= 20) level = "逐渐熟悉"
+                    return "亲密度 " + itm + "，信任度 " + tr + "：" + level + " 的关系。AI 会记住我们认识的深度，保持关系连续性。"
+                }
                 color: Theme.textDim
                 font.pixelSize: 11
                 wrapMode: Text.Wrap
