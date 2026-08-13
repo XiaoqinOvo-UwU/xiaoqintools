@@ -4,6 +4,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QDateTime>
 #include <QDate>
 #include <QTime>
@@ -449,6 +450,8 @@ bool AiService::isFullscreenGame()
 }
 
 // ---- is the foreground window Minecraft? ----
+// MC Java (including Chinese-named mod packs) runs on javaw.exe/java.exe,
+// so we detect by the foreground window's process rather than the title alone.
 bool AiService::isForegroundMinecraft()
 {
 #ifdef Q_OS_WIN
@@ -459,6 +462,24 @@ bool AiService::isForegroundMinecraft()
     DWORD winPid = 0;
     GetWindowThreadProcessId(hwnd, &winPid);
     if (winPid == ourPid) return false;
+
+    // check the foreground window's process name first
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, winPid);
+    if (hProc) {
+        wchar_t pbuf[512];
+        DWORD n = 512;
+        if (QueryFullProcessImageNameW(hProc, 0, pbuf, &n)) {
+            QString path = QString::fromWCharArray(pbuf, (int)n);
+            QString base = QFileInfo(path).fileName().toLower();
+            CloseHandle(hProc);
+            if (base == "javaw.exe" || base == "java.exe")
+                return true; // Java game foreground -> treat as Minecraft
+        } else {
+            CloseHandle(hProc);
+        }
+    }
+
+    // fallback: window title contains "Minecraft" (vanilla or english launchers)
     wchar_t buf[512];
     int len = GetWindowTextW(hwnd, buf, 512);
     if (len <= 0) return false;
