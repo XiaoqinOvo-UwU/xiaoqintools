@@ -22,12 +22,14 @@ public:
     Q_PROPERTY(QString downloadUrl READ downloadUrl NOTIFY updateAvailableChanged)
     Q_PROPERTY(bool downloading READ downloading NOTIFY downloadStateChanged)
     Q_PROPERTY(int downloadProgress READ downloadProgress NOTIFY downloadStateChanged)
+    Q_PROPERTY(QString lastError READ lastError NOTIFY checkFinished)
 
     bool updateAvailable() const { return m_available; }
     QString latestVersion() const { return m_latest; }
     QString downloadUrl() const { return m_url; }
     bool downloading() const { return m_downloading; }
     int downloadProgress() const { return m_progress; }
+    QString lastError() const { return m_lastError; }
 
 signals:
     void updateAvailableChanged();
@@ -47,6 +49,7 @@ private:
     bool m_available = false;
     QString m_latest;
     QString m_url;              // canonical GitHub asset download url
+    QString m_lastError;        // human-readable last check error (empty = ok)
     bool m_downloading = false;
     int m_progress = 0;
     QNetworkAccessManager *m_mgr = nullptr;

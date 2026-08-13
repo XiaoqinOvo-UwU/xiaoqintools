@@ -54,6 +54,7 @@ void UpdateService::parseLatestRelease(const QByteArray &data)
     QJsonParseError pe;
     QJsonDocument doc = QJsonDocument::fromJson(data, &pe);
     if (pe.error != QJsonParseError::NoError || !doc.isObject()) {
+        m_lastError = "检查失败：无法解析服务器返回（可能是网络/代理问题）";
         emit checkFinished(false);
         return;
     }
@@ -85,16 +86,19 @@ void UpdateService::parseLatestRelease(const QByteArray &data)
 
     QString local = currentVersion();
     if (tag.isEmpty()) {
+        m_lastError = "检查失败：服务器返回的版本信息为空";
         emit checkFinished(false);
         return;
     }
     if (!versionGreater(tag, local)) {
+        m_lastError.clear(); // truly up to date
         emit checkFinished(false); // already up to date
         return;
     }
     m_latest = tag;
     m_url = assetUrl; // public repo: direct download works
     m_available = true;
+    m_lastError.clear();
     emit updateAvailableChanged();
     emit checkFinished(true);
 }
@@ -104,24 +108,36 @@ void UpdateService::checkForUpdates()
     // GitHub releases API (public repo, no token needed for read).
     QString api = "https://api.github.com/repos/XiaoqinOvo-UwU/xiaoqintools/releases/latest";
 
+    m_lastError.clear();
+    m_available = false;
+    emit updateAvailableChanged();
+
     if (!m_mgr) m_mgr = new QNetworkAccessManager(this);
-    // GitHub needs a proxy in CN. Route through Clash(7897)/v2rayN(10808) when reachable.
+    // GitHub needs a proxy in CN. Prefer the system proxy (works for Clash
+    // TUN/mixed mode and v2rayN), fall back to the known ports.
+    m_mgr->setProxy(QNetworkProxy::applicationProxy()); // system proxy if any
     ProxyService probe;
-    if (probe.isClashPortOpen())
-        m_mgr->setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, "127.0.0.1", 7897));
-    else if (probe.isV2rayPortOpen())
-        m_mgr->setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, "127.0.0.1", 10808));
-    else
-        m_mgr->setProxy(QNetworkProxy(QNetworkProxy::NoProxy));
+    if (m_mgr->proxy().type() == QNetworkProxy::NoProxy) {
+        if (probe.isClashPortOpen())
+            m_mgr->setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, "127.0.0.1", 7897));
+        else if (probe.isV2rayPortOpen())
+            m_mgr->setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, "127.0.0.1", 10808));
+        else
+            m_mgr->setProxy(QNetworkProxy(QNetworkProxy::NoProxy));
+    }
 
     QNetworkRequest req;
     req.setUrl(QUrl(api));
     req.setRawHeader("User-Agent", "XiaoQinTools");
     req.setRawHeader("Accept", "application/vnd.github+json");
+    // follow 301/302 redirects (repo moved etc.)
+    req.setMaximumRedirectsAllowed(5);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     QNetworkReply *reply = m_mgr->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
+            m_lastError = "检查失败：" + reply->errorString();
             emit checkFinished(false);
             return;
         }

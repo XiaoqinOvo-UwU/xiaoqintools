@@ -389,6 +389,8 @@ Page {
                 onTriggered: {
                     if (updateService.updateAvailable) {
                         root.note = "发现新版本 " + updateService.latestVersion + "，可点「下载并安装」"
+                    } else if (updateService.lastError.length > 0) {
+                        root.note = updateService.lastError
                     } else {
                         root.note = "当前已是最新版本"
                     }
@@ -408,7 +410,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小钦的工具 v3.5.0 · 泉此方天下第一"
+                text: "小钦的工具 v3.5.1 · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
             }

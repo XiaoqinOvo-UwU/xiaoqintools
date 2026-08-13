@@ -1,12 +1,12 @@
-; 小钦的工具 v3.5.0 安装脚本
+; 小钦的工具 v3.5.1 安装脚本
 #define MyAppName "小钦的工具"
-#define MyAppVersion "3.5.0"
+#define MyAppVersion "3.5.1"
 #define MyAppExeName "XiaoQinTools.exe"
 #define MyAppPublisher "XiaoQinUwU"
-#define MyAppURL "https://github.com/xiaoqinnb666/xiaoqintools"
+#define MyAppURL "https://github.com/XiaoqinOvo-UwU/xiaoqintools"
 
 [Setup]
-AppId={{8F5C3E2A-1B4D-4E7C-9A2B-XIAOQIN001}
+AppId={{8F5C3E2A-1B4D-4E7C-9A2B-2F6A4C8E1B7D}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -61,8 +61,8 @@ begin
     cands.Add(ExpandConstant('{userdesktop}') + '\xiaoqintools-test');
     cands.Add(ExpandConstant('{userdesktop}') + '\XiaoQinTools');
     cands.Add(ExpandConstant('{userdesktop}') + '\小钦的工具');
-    cands.Add(ExpandConstant('{%USERPROFILE}\Downloads') + '\xiaoqintools-test');
-    cands.Add(ExpandConstant('{%USERPROFILE}\Documents') + '\XiaoQinTools');
+    cands.Add(ExpandConstant('{userdocs}') + '\xiaoqintools-test');
+    cands.Add(ExpandConstant('{userdocs}') + '\XiaoQinTools');
     cands.Add('C:\XiaoQinTools\dist_old');
     cands.Add('C:\XiaoQinTools\test-311');
     cands.Add('C:\XiaoQinTools\zip-install');
