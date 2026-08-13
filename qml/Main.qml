@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.12"
+                        text: "小钦的工具 v3.5.13"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -606,13 +606,10 @@ ApplicationWindow {
                 }
             }
         }
-        contentItem: ScrollView {
-            clip: true
-            ScrollBar.vertical.policy: ScrollBar.AsNeeded
-            ColumnLayout {
-                id: profileCol
-                width: aiProfileDialog.width - 36
-                spacing: 10
+        contentItem: ColumnLayout {
+            id: profileCol
+            width: aiProfileDialog.width - 36
+            spacing: 10
 
                 Text { text: "AI 名字"; color: Theme.textDim; font.pixelSize: 12 }
                 TextField {
@@ -624,21 +621,29 @@ ApplicationWindow {
                     background: Rectangle { color: Theme.inputBg; radius: 8 }
                 }
                 Text { text: "AI 人设"; color: Theme.textDim; font.pixelSize: 12 }
-                // fixed-height container; the TextArea inside scrolls its own
-                // content so long personas never stretch the dialog
+                // scrollable editor: ScrollView provides the scrollbar & wheel
+                // scrolling (same pattern as the note list), so long personas
+                // never stretch the dialog
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 160
                     color: Theme.inputBg
                     radius: 8
-                    TextArea {
-                        id: profileAiPersonality
+                    clip: true
+                    ScrollView {
                         anchors.fill: parent
                         anchors.margins: 8
-                        color: Theme.text
-                        text: aiService.aiPersonality()
-                        wrapMode: TextEdit.Wrap
-                        background: null
+                        clip: true
+                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                        TextArea {
+                            id: profileAiPersonality
+                            width: parent.width - 8
+                            height: Math.max(parent.height, implicitHeight)
+                            color: Theme.text
+                            text: aiService.aiPersonality()
+                            wrapMode: TextEdit.Wrap
+                            background: null
+                        }
                     }
                 }
                 RowLayout {
@@ -705,7 +710,6 @@ ApplicationWindow {
 
                 Item { Layout.preferredHeight: 10 }
             }
-        }
     }
 
     // ================= MEMORY DIALOGS =================
