@@ -24,6 +24,9 @@
 #include <QMap>
 #include <algorithm>
 
+// forward decls for helpers defined later in this file
+static QJsonObject readAiState();
+
 AiService::AiService(QObject *parent)
     : QObject(parent)
 {
@@ -772,6 +775,49 @@ QString AiService::memoryDetail()
     }
     if (shown == 0)
         lines << "  （暂无时长记录）";
+
+    // ---- companion: event memory ----
+    QString events = eventMemoryText(8);
+    if (!events.isEmpty()) {
+        lines << "";
+        lines << "【共同经历（事件记忆）】";
+        lines << "  " + events.replace('\n', "\n  ");
+    }
+
+    // ---- personality ----
+    QString pers = personalityText();
+    if (!pers.isEmpty()) {
+        lines << "";
+        lines << "【人格】";
+        lines << "  " + pers.replace('\n', "\n  ");
+    }
+
+    // ---- relationship ----
+    lines << "";
+    lines << "【与用户的关系】";
+    lines << "  " + relationshipText();
+
+    // ---- AI state ----
+    QJsonObject ast = readAiState();
+    lines << "";
+    lines << "【AI 状态】心情：" + ast.value("mood").toString("calm")
+             + "，精力：" + QString::number(ast.value("energy").toInt(80));
+
+    // ---- interests ----
+    QString interests = interestsText(8);
+    if (!interests.isEmpty()) {
+        lines << "";
+        lines << "【用户兴趣】";
+        lines << "  " + interests.replace('\n', "\n  ");
+    }
+
+    // ---- unfinished topics ----
+    QString topics = unfinishedTopicsText(5);
+    if (!topics.isEmpty()) {
+        lines << "";
+        lines << "【未完成话题】";
+        lines << "  " + topics.replace('\n', "\n  ");
+    }
 
     return lines.join("\n");
 }
