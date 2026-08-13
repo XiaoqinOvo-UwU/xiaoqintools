@@ -603,11 +603,13 @@ void AiService::idleChat()
             + "\n【事实来源分级】你唯一能确定的用户信息来自：①用户说过的话；②上面标[真实读取]的数据。"
               "没有来源的用户行为描述一律禁止，绝不能说'我看到你''你玩了X小时'，除非上面明确给出。"
               "不确定就用'感觉''是不是''我猜'，或干脆不提。宁可少说，不可编造。\n"
+            + "【角色边界】你是现实陪伴型AI，禁止描述自己做不到的动作（如'我去调整''我帮你改了'），"
+              "禁止虚构共同经历。陪伴说'我陪着你'，不说'我知道你发生了什么'。\n"
             + "\n请结合上面信息主动找个话题和ta聊一句：优先延续未完成的话题，其次是共同经历和兴趣，"
               "自然得像老朋友提起，不要说'根据记忆'。"
               "如果用户深夜还没睡，语气更温柔；如果用户在打游戏，轻松提一句别啰嗦；"
               "如果用户刚离开回来，用'回来啦'打招呼；如果用户在做正事（写代码等），这次就安静别打扰，输出空字符串。"
-              "像朋友一样，简短一句话，不要生硬，不要罗列数据。\n"
+              "像朋友一样，20-80字简短一句，不要生硬，不要罗列数据。\n"
               "你的当前状态：" + aiState + "\n你可以参考记忆：\n" + mem + "\n只输出这句话本身，若决定不打扰则输出空。";
         return callDeepSeekStatic("你是温柔可爱的AI陪伴者。", prompt);
     });
@@ -945,6 +947,15 @@ void AiService::sendMessage(const QString &text)
           "Level 2 合理推测：如果只是基于时间/习惯的猜测，必须用'感觉''是不是''我猜''好像'等疑问或推测语气，不能当成事实陈述。\n"
           "Level 3 禁止：没有任何来源的用户行为描述一律禁止生成。绝不能说'我看到你''刚刚你''你玩了X小时'这类话，除非[Context]明确给出。\n"
           "规则：宁可少说，不可编造。不确定的信息就问，不要假装知道。\n"
+        + "【角色边界——同样重要】\n"
+          "你是现实陪伴型AI，不是小说角色。\n"
+          "①禁止描述你执行了做不到的动作：如'我去调整城市灯光''我帮你改了'。你只能在对话里陪伴、倾听、给建议，不能真的改变用户电脑或现实世界（除非系统真的提供了该能力）。\n"
+          "②禁止虚构共同经历和过度戏剧化。\n"
+          "③陪伴方式：不要说'我知道你发生了什么'，改成'我陪着你'；不要说'我看到了你的生活'，改成'我关心你的状态'。\n"
+        + "【回复长度】\n"
+          "普通聊天：20-80字，简短自然。\n"
+          "深入话题或用户求助：100-300字。\n"
+          "禁止长篇大论。允许轻微玩笑、撒娇、小情绪，不要每句话都安慰。\n"
         + "当前策略：" + strategy + "\n"
         + "情绪表达：回复开头用一个情绪令牌表示你此刻的情绪，例如 <|ACT {\"emotion\":\"happy\"}|>；"
           "若中途情绪变化，在变化处再插一个令牌；需要停顿节奏时可插入 <|DELAY 1|>（数字为秒）。"
@@ -973,9 +984,9 @@ void AiService::sendMessage(const QString &text)
     QString fg = foregroundApp();
     if (!fg.isEmpty())
         ctx << "- app[真实读取]: 用户当前前台窗口是 " + fg;
-    QString act = activitySummary();
-    if (!act.isEmpty() && !act.startsWith("（"))
-        ctx << "- activity(历史聚合，今天早些时候的统计，不代表现在): " + act;
+    // NOTE: historical aggregate (activitySummary) is intentionally NOT injected
+    // in normal chat — it's a fuzzy "today mostly used X" that tempts the AI into
+    // fabricating "you played X for hours". Only idle chat may use it.
     QString contextBlock = "[Context]\n" + ctx.join("\n");
 
     // recent conversation history so the AI can see what was said before

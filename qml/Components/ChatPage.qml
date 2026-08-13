@@ -246,15 +246,25 @@ Rectangle {
             property bool stickToBottom: true
             onContentYChanged: {
                 // if user scrolled away from bottom, stop auto-following
-                if (contentHeight - contentY - height > 40)
-                    stickToBottom = false
-                else
-                    stickToBottom = true
+                var dist = contentHeight - contentY - height
+                stickToBottom = dist <= 40
             }
-            // when content grows (new/multi-line message), follow only if pinned
+            // whenever the content grows (new message or text wrapping to more
+            // lines), follow the bottom if the user is pinned there. Deferring
+            // twice lets the delegate height settle before we jump.
             onContentHeightChanged: {
-                if (stickToBottom)
+                if (stickToBottom) {
                     Qt.callLater(function() { positionViewAtEnd() })
+                    Qt.callLater(function() { Qt.callLater(function() { positionViewAtEnd() }) })
+                }
+            }
+            // a new row appended: jump immediately (before it wraps), then again
+            // once the content height settles
+            onCountChanged: {
+                if (stickToBottom) {
+                    Qt.callLater(function() { positionViewAtEnd() })
+                    Qt.callLater(function() { Qt.callLater(function() { positionViewAtEnd() }) })
+                }
             }
             delegate: Rectangle {
                 id: delegateRoot
@@ -298,6 +308,14 @@ Rectangle {
                         wrapMode: Text.Wrap
                         verticalAlignment: Text.AlignVCenter
                         horizontalAlignment: Text.AlignLeft
+                        // when this bubble's text wraps to more lines, keep the
+                        // view pinned to the bottom (multi-line replies)
+                        onImplicitHeightChanged: {
+                            if (msgView.stickToBottom) {
+                                Qt.callLater(function() { msgView.positionViewAtEnd() })
+                                Qt.callLater(function() { Qt.callLater(function() { msgView.positionViewAtEnd() }) })
+                            }
+                        }
                     }
                 }
             }
