@@ -417,6 +417,31 @@ bool AiService::isGameRunning()
     return false;
 }
 
+// ---- light-weight process snapshot (only for idle chat, runs in background) ----
+static QString processSnapshot()
+{
+#ifdef Q_OS_WIN
+    QProcess p;
+    p.start("tasklist", QStringList() << "/FO" << "CSV" << "/NH");
+    if (!p.waitForFinished(3000)) return QString();
+    QString out = QString::fromLocal8Bit(p.readAllStandardOutput());
+    QStringList names;
+    // parse "name.exe","pid",... lines, dedupe, cap at 30
+    for (const QString &line : out.split('\n')) {
+        int q1 = line.indexOf('"');
+        int q2 = line.indexOf('"', q1 + 1);
+        if (q1 < 0 || q2 < 0) continue;
+        QString name = line.mid(q1 + 1, q2 - q1 - 1).toLower();
+        if (name.isEmpty()) continue;
+        if (!names.contains(name)) names.append(name);
+        if (names.size() >= 30) break;
+    }
+    return names.join(", ");
+#else
+    return QString();
+#endif
+}
+
 // ---- idle chat: AI proactively starts a topic ----
 void AiService::idleChat()
 {
@@ -424,9 +449,9 @@ void AiService::idleChat()
     QString user = ConfigService::instance().userName();
     QString ai = ContactService::instance().currentName();
     QString personality = ContactService::instance().currentPersonality();
-    QString prompt = "你是" + ai + "，性格" + personality + "。用户" + user + "已经有一会儿没操作电脑了。"
-                     "请自然地主动找个话题和ta聊一句（关心、分享、或随便聊聊），像朋友一样，简短一句话，不要生硬。"
-                     "你可以参考记忆：\n" + mem + "\n只输出这句话本身。";
+    QString activity = activitySummary(); // already cheap (in-memory/JSON)
+    QString fg = foregroundApp();         // cheap win32 call
+
     auto *watcher = new QFutureWatcher<QString>(this);
     connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
         QString raw = watcher->result();
@@ -444,7 +469,22 @@ void AiService::idleChat()
         emit idleReply(text);
         watcher->deleteLater();
     });
-    QFuture<QString> future = QtConcurrent::run([prompt]() {
+    // collect the process snapshot in the worker thread (one tasklist call,
+    // only on idle trigger — zero cost during normal use)
+    QFuture<QString> future = QtConcurrent::run([mem, user, ai, personality, activity, fg]() {
+        QString procs = processSnapshot();
+        QStringList ctx;
+        if (!activity.isEmpty() && !activity.startsWith("（"))
+            ctx << "- 用户今天大部分时间在：" + activity;
+        if (!fg.isEmpty())
+            ctx << "- 用户当前正在使用：" + fg;
+        if (!procs.isEmpty())
+            ctx << "- 用户电脑正在运行的进程（节选）：" + procs;
+        QString prompt = "你是" + ai + "，性格" + personality + "。用户" + user + "已经有一会儿没操作电脑了。\n"
+            + ctx.join("\n")
+            + "\n请结合上面的信息，自然地主动找个话题和ta聊一句（比如聊聊ta在玩/在做的、关心的、或随便分享），"
+              "像朋友一样，简短一句话，不要生硬，不要罗列数据。\n"
+              "你可以参考记忆：\n" + mem + "\n只输出这句话本身。";
         return callDeepSeekStatic("你是温柔可爱的AI陪伴者。", prompt);
     });
     watcher->setFuture(future);
