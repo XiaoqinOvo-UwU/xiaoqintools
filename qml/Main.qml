@@ -276,7 +276,7 @@ ApplicationWindow {
                                     anchors.top: parent.top
                                     anchors.rightMargin: -1
                                     anchors.topMargin: -1
-                                    visible: cid === contactService.currentId() && root.unreadCount > 0 && !root.chatOpen
+                                    visible: cid === contactService.currentId() && root.unreadCount > 0 && (!root.chatOpen || !root.active)
                                 }
                             }
                             Column {
@@ -906,9 +906,9 @@ ApplicationWindow {
         }
         function onIdleReply(text) {
             // proactive message from the AI:
-            // - if the chat page is open for the current AI, no sound / no badge
-            // - otherwise play the notification sound and show the unread dot
-            if (root.chatOpen) {
+            // - if the window is active AND chat page is open for the current AI -> no sound / no badge
+            // - otherwise (backgrounded, minimized, or chat closed) play sound and show the unread dot
+            if (root.active && root.chatOpen) {
                 root.clearUnread()
                 return
             }

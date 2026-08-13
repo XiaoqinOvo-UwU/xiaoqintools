@@ -33,7 +33,7 @@ Rectangle {
         // if this contact has no history yet, show a greeting bubble
         if (msgModel.count === 0)
             msgModel.append({ "isAi": true, "msg": "你好，我是" + aiService.aiName() + "。" })
-        msgView.positionViewAtEnd()
+        Qt.callLater(function() { msgView.positionViewAtEnd() })
     }
 
     function saveMsg(contactId, isAi, msg) {
@@ -322,7 +322,7 @@ Rectangle {
         chatInput.text = ""
         msgModel.append({ "isAi": false, "msg": t })
         msgModel.append({ "isAi": true, "msg": "..." })
-        msgView.positionViewAtEnd()
+        Qt.callLater(function() { msgView.positionViewAtEnd() })
         setHeaderStatus(aiService.aiName() + " 正在输入...")
         aiService.sendMessage(t)
         // persistence is best-effort; never let it break the chat
@@ -341,9 +341,19 @@ Rectangle {
     // then reveal the full reply at once. Each reply is processed one after
     // another; rapid consecutive messages never cancel an earlier reply.
     function appendAi(text) {
-        // ensure a placeholder bubble exists for this reply
-        if (msgModel.count === 0 || !msgModel.get(msgModel.count-1).isAi) {
+        // one placeholder per reply: only add a new "..." bubble when there is
+        // no pending placeholder to fill, otherwise consecutive AI messages
+        // (e.g. proactive idle chats) would overwrite each other.
+        var hasPlaceholder = false
+        for (var i = 0; i < msgModel.count; i++) {
+            if (msgModel.get(i).isAi && msgModel.get(i).msg === "...") {
+                hasPlaceholder = true
+                break
+            }
+        }
+        if (!hasPlaceholder) {
             msgModel.append({ "isAi": true, "msg": "..." })
+            Qt.callLater(function() { msgView.positionViewAtEnd() })
         }
         // typing speed ~ 120ms per char, clamp to 1.5s ~ 12s
         var ms = Math.round(text.length * 120)
@@ -376,18 +386,19 @@ Rectangle {
         repeat: false
         onTriggered: {
             replyBusy = false
-            // reveal this reply in the last AI placeholder bubble
+            // reveal this reply in the first pending "..." placeholder bubble
             var text = chatPage.pendingReply
-            if (msgModel.count > 0) {
-                var last = msgModel.get(msgModel.count-1)
-                if (last.isAi)
-                    msgModel.set(msgModel.count-1, { "isAi": true, "msg": text })
-                else
-                    msgModel.append({ "isAi": true, "msg": text })
-            } else {
-                msgModel.append({ "isAi": true, "msg": text })
+            var filled = false
+            for (var i = 0; i < msgModel.count; i++) {
+                if (msgModel.get(i).isAi && msgModel.get(i).msg === "...") {
+                    msgModel.set(i, { "isAi": true, "msg": text })
+                    filled = true
+                    break
+                }
             }
-            msgView.positionViewAtEnd()
+            if (!filled)
+                msgModel.append({ "isAi": true, "msg": text })
+            Qt.callLater(function() { msgView.positionViewAtEnd() })
             // persistence (best-effort)
             try {
                 var cid = chatPage.currentContactId.length > 0 ? chatPage.currentContactId : contactService.currentId()

@@ -406,8 +406,9 @@ QString AiService::foregroundApp()
 // ---- idle detection: game running? ----
 bool AiService::isGameRunning()
 {
-    // common games the user plays
-    QStringList games = { "r5apex.exe", "javaw.exe", "java.exe", "Minecraft", "steam.exe" };
+    // common games the user plays — NOTE: steam.exe is a background client,
+    // not a game; treating it as "gaming" blocked idle chat entirely
+    QStringList games = { "r5apex.exe", "javaw.exe", "java.exe", "Minecraft" };
     QProcess p;
     p.start("tasklist", QStringList() << "/FO" << "CSV");
     if (!p.waitForFinished(1500)) return false;
