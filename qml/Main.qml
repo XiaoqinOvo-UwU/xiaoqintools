@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.10"
+                        text: "小钦的工具 v3.5.11"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -624,18 +624,22 @@ ApplicationWindow {
                     background: Rectangle { color: Theme.inputBg; radius: 8 }
                 }
                 Text { text: "AI 人设"; color: Theme.textDim; font.pixelSize: 12 }
-                // fixed-height text area: content scrolls inside instead of
-                // growing the dialog (long personas no longer stretch the window)
-                TextArea {
-                    id: profileAiPersonality
+                // fixed-height container; the TextArea inside scrolls its own
+                // content so long personas never stretch the dialog
+                Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 160
-                    Layout.minimumHeight: 80
-                    Layout.maximumHeight: 240
-                    color: Theme.text
-                    text: aiService.aiPersonality()
-                    wrapMode: TextEdit.Wrap
-                    background: Rectangle { color: Theme.inputBg; radius: 8 }
+                    color: Theme.inputBg
+                    radius: 8
+                    TextArea {
+                        id: profileAiPersonality
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        color: Theme.text
+                        text: aiService.aiPersonality()
+                        wrapMode: TextEdit.Wrap
+                        background: null
+                    }
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -751,7 +755,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "📝 用户笔记（你告诉过我的事）"
-                    onClicked: { memoryCat.openCat("笔记", aiService.notesText(), false) }
+                    onClicked: { notesDialog.open() }
                 }
                 // 共同经历
                 AppButton {
@@ -764,40 +768,29 @@ ApplicationWindow {
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
-                    text: "🎭 人格（性格特质与风格，可编辑）"
-                    onClicked: { memoryCat.openCat("人格", aiService.personalityRaw(), true) }
+                    text: "🎭 人格（性格特质与风格，可调整）"
+                    onClicked: { personaDialog.open() }
                 }
                 // 关系
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
-                    text: "💞 与我的关系（亲密度/信任度，可编辑）"
-                    onClicked: {
-                        // editable as {"intimacy":..,"trust":..}
-                        var json = '{\n  "intimacy": 70,\n  "trust": 80\n}'
-                        memoryCat.openCat("关系", json, true)
-                    }
-                }
-                // AI 状态
-                AppButton {
-                    Layout.fillWidth: true
-                    implicitHeight: 40
-                    text: "⚡ AI 状态（温柔/活跃/心情，可调整）"
-                    onClicked: { aiStateDialog.open() }
+                    text: "💞 与我的关系（亲密度/信任度，可调整）"
+                    onClicked: { relationshipDialog.open() }
                 }
                 // 兴趣
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "⭐ 我的兴趣（可编辑）"
-                    onClicked: { memoryCat.openCat("兴趣", aiService.interestsRaw(), true) }
+                    onClicked: { interestsDialog.open() }
                 }
                 // 未完成话题
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
                     text: "💬 未完成话题（可编辑）"
-                    onClicked: { memoryCat.openCat("未完成话题", aiService.unfinishedRaw(), true) }
+                    onClicked: { topicsDialog.open() }
                 }
                 // 使用时长
                 AppButton {
@@ -906,153 +899,381 @@ ApplicationWindow {
         }
     }
 
-    // ================= AI STATE DIALOG =================
+    // ================= FRIENDLY CATEGORY DIALOGS =================
+    // 用户笔记：列表 + 增删
     Dialog {
-        id: aiStateDialog
-        width: 440
-        height: 520
+        id: notesDialog
+        width: 460
+        height: 420
         modal: true
         x: (root.width - width) / 2
         y: (root.height - height) / 2
-        background: Rectangle {
-            color: Theme.surface
-            radius: 14
-            border.color: Theme.glassBorder
-            border.width: 1
-        }
+        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
         header: Item {
             height: 40
-            Text {
-                anchors.centerIn: parent
-                text: "AI 状态"
-                color: Theme.text
-                font.pixelSize: 16
-                font.bold: true
-            }
+            Text { anchors.centerIn: parent; text: "用户笔记"; color: Theme.text; font.pixelSize: 16; font.bold: true }
             AppButton {
-                anchors.right: parent.right
-                anchors.rightMargin: 6
+                anchors.right: parent.right; anchors.rightMargin: 6
                 anchors.verticalCenter: parent.verticalCenter
-                text: "✕"
-                implicitWidth: 30
-                implicitHeight: 30
-                btnRadius: 15
-                onClicked: aiStateDialog.close()
+                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
+                onClicked: notesDialog.close()
             }
         }
         contentItem: ColumnLayout {
-            anchors.fill: parent
-            spacing: 14
-
-            // 温柔程度
-            Text { text: "温柔程度"; color: Theme.text; font.pixelSize: 13; font.bold: true }
-            RowLayout {
+            spacing: 8
+            ListView {
+                id: notesListView
                 Layout.fillWidth: true
-                spacing: 10
-                Slider {
-                    id: tendernessSlider
-                    Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.stateInt("tenderness")
-                    onValueChanged: aiService.setStateInt("tenderness", value)
-                }
-                Text {
-                    text: tendernessSlider.value
-                    color: Theme.textDim
-                    font.pixelSize: 12
-                    Layout.preferredWidth: 30
-                    horizontalAlignment: Text.AlignRight
+                Layout.fillHeight: true
+                clip: true
+                spacing: 4
+                model: aiService.noteList()
+                delegate: RowLayout {
+                    width: notesListView.width
+                    spacing: 8
+                    Text {
+                        Layout.fillWidth: true
+                        text: modelData
+                        color: Theme.text
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+                    AppButton {
+                        text: "删"
+                        implicitWidth: 34; implicitHeight: 30
+                        onClicked: {
+                            aiService.removeNote(index)
+                            notesListView.model = aiService.noteList()
+                        }
+                    }
                 }
             }
-
-            // 活跃程度
-            Text { text: "活跃程度"; color: Theme.text; font.pixelSize: 13; font.bold: true }
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
-                Slider {
-                    id: energySlider
+                spacing: 8
+                TextField {
+                    id: noteInput
                     Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.stateInt("energy")
-                    onValueChanged: aiService.setStateInt("energy", value)
+                    Layout.preferredHeight: 36
+                    color: Theme.text
+                    placeholderText: "告诉 AI 一件值得记住的事..."
+                    background: Rectangle { color: Theme.inputBg; radius: 8 }
                 }
-                Text {
-                    text: energySlider.value
-                    color: Theme.textDim
-                    font.pixelSize: 12
-                    Layout.preferredWidth: 30
-                    horizontalAlignment: Text.AlignRight
+                AppButton {
+                    text: "添加"
+                    implicitHeight: 36
+                    onClicked: {
+                        aiService.addMemoryNote(noteInput.text)
+                        noteInput.text = ""
+                        notesListView.model = aiService.noteList()
+                    }
                 }
             }
+        }
+    }
 
-            // 陪伴倾向
-            Text { text: "陪伴倾向"; color: Theme.text; font.pixelSize: 13; font.bold: true }
+    // 人格：特质滑条 + 风格下拉
+    Dialog {
+        id: personaDialog
+        width: 440
+        height: 500
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
+        header: Item {
+            height: 40
+            Text { anchors.centerIn: parent; text: "人格"; color: Theme.text; font.pixelSize: 16; font.bold: true }
+            AppButton {
+                anchors.right: parent.right; anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
+                onClicked: personaDialog.close()
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 10
+
+            Text { text: "温柔"; color: Theme.textDim; font.pixelSize: 12 }
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
                 Slider {
-                    id: companionSlider
+                    id: traitGentle
                     Layout.fillWidth: true
                     from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.stateInt("companion")
-                    onValueChanged: aiService.setStateInt("companion", value)
+                    Component.onCompleted: value = aiService.personaTrait("温柔")
+                    onValueChanged: aiService.setPersonaTrait("温柔", value)
                 }
-                Text {
-                    text: companionSlider.value
-                    color: Theme.textDim
-                    font.pixelSize: 12
-                    Layout.preferredWidth: 30
-                    horizontalAlignment: Text.AlignRight
-                }
+                Text { text: traitGentle.value; color: Theme.textDim; font.pixelSize: 11 }
             }
-
-            // 当前心情
-            Text { text: "当前心情"; color: Theme.text; font.pixelSize: 13; font.bold: true }
+            Text { text: "傲娇"; color: Theme.textDim; font.pixelSize: 12 }
+            RowLayout {
+                Layout.fillWidth: true
+                Slider {
+                    id: traitTsun
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    Component.onCompleted: value = aiService.personaTrait("傲娇")
+                    onValueChanged: aiService.setPersonaTrait("傲娇", value)
+                }
+                Text { text: traitTsun.value; color: Theme.textDim; font.pixelSize: 11 }
+            }
+            Text { text: "幽默"; color: Theme.textDim; font.pixelSize: 12 }
+            RowLayout {
+                Layout.fillWidth: true
+                Slider {
+                    id: traitHumor
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    Component.onCompleted: value = aiService.personaTrait("幽默")
+                    onValueChanged: aiService.setPersonaTrait("幽默", value)
+                }
+                Text { text: traitHumor.value; color: Theme.textDim; font.pixelSize: 11 }
+            }
+            Text { text: "依赖"; color: Theme.textDim; font.pixelSize: 12 }
+            RowLayout {
+                Layout.fillWidth: true
+                Slider {
+                    id: traitCling
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    Component.onCompleted: value = aiService.personaTrait("依赖")
+                    onValueChanged: aiService.setPersonaTrait("依赖", value)
+                }
+                Text { text: traitCling.value; color: Theme.textDim; font.pixelSize: 11 }
+            }
+            Text { text: "成熟"; color: Theme.textDim; font.pixelSize: 12 }
+            RowLayout {
+                Layout.fillWidth: true
+                Slider {
+                    id: traitMature
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    Component.onCompleted: value = aiService.personaTrait("成熟")
+                    onValueChanged: aiService.setPersonaTrait("成熟", value)
+                }
+                Text { text: traitMature.value; color: Theme.textDim; font.pixelSize: 11 }
+            }
+            Text { text: "回复风格"; color: Theme.textDim; font.pixelSize: 12 }
             ComboBox {
-                id: moodCombo
+                id: personaStyleCombo
                 Layout.fillWidth: true
-                model: ["平静", "开心", "温柔", "低落", "活跃"]
-                property var moodValues: ["calm", "happy", "gentle", "low", "active"]
+                model: ["自然", "简短", "详细"]
                 Component.onCompleted: {
-                    var cur = aiService.stateStr("mood")
-                    for (var i = 0; i < moodValues.length; i++)
-                        if (moodValues[i] === cur) { currentIndex = i; break }
+                    var s = aiService.personaStyle("回复长度")
+                    if (s === "简短") currentIndex = 1
+                    else if (s === "详细") currentIndex = 2
+                    else currentIndex = 0
                 }
                 onActivated: {
-                    var idx = moodCombo.currentIndex
-                    if (idx >= 0 && idx < moodCombo.moodValues.length)
-                        aiService.setStateStr("mood", moodCombo.moodValues[idx])
+                    var styles = ["自然", "简短", "详细"]
+                    aiService.setPersonaStyle("回复长度", styles[currentIndex])
                 }
             }
-
-            // 回复风格
-            Text { text: "回复风格"; color: Theme.text; font.pixelSize: 13; font.bold: true }
-            ComboBox {
-                id: styleCombo
-                Layout.fillWidth: true
-                model: ["简短", "自然", "详细"]
-                property var styleValues: ["short", "natural", "detailed"]
-                Component.onCompleted: {
-                    var cur2 = aiService.stateStr("reply_style")
-                    for (var j = 0; j < styleValues.length; j++)
-                        if (styleValues[j] === cur2) { currentIndex = j; break }
-                }
-                onActivated: {
-                    var idx2 = styleCombo.currentIndex
-                    if (idx2 >= 0 && idx2 < styleCombo.styleValues.length)
-                        aiService.setStateStr("reply_style", styleCombo.styleValues[idx2])
-                }
-            }
-
-            Item { Layout.fillHeight: true }
-
             Text {
                 Layout.fillWidth: true
-                text: "拖动滑块或选择选项即可调整，改动实时生效"
+                text: "拖动滑块调整性格特质，改动实时生效"
                 color: Theme.textDim
                 font.pixelSize: 11
                 horizontalAlignment: Text.AlignHCenter
+            }
+        }
+    }
+
+    // 关系：两个滑条
+    Dialog {
+        id: relationshipDialog
+        width: 440
+        height: 320
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
+        header: Item {
+            height: 40
+            Text { anchors.centerIn: parent; text: "与我的关系"; color: Theme.text; font.pixelSize: 16; font.bold: true }
+            AppButton {
+                anchors.right: parent.right; anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
+                onClicked: relationshipDialog.close()
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 12
+            Text { text: "亲密度"; color: Theme.textDim; font.pixelSize: 12 }
+            RowLayout {
+                Layout.fillWidth: true
+                Slider {
+                    id: relIntimacy
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    Component.onCompleted: value = aiService.relationshipIntimacy()
+                    onValueChanged: aiService.setRelationship(value, aiService.relationshipTrust())
+                }
+                Text { text: relIntimacy.value; color: Theme.textDim; font.pixelSize: 11 }
+            }
+            Text { text: "信任度"; color: Theme.textDim; font.pixelSize: 12 }
+            RowLayout {
+                Layout.fillWidth: true
+                Slider {
+                    id: relTrust
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    Component.onCompleted: value = aiService.relationshipTrust()
+                    onValueChanged: aiService.setRelationship(aiService.relationshipIntimacy(), value)
+                }
+                Text { text: relTrust.value; color: Theme.textDim; font.pixelSize: 11 }
+            }
+            Text {
+                Layout.fillWidth: true
+                text: aiService.relationshipText()
+                color: Theme.textDim
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
+            }
+        }
+    }
+
+    Dialog {
+        id: interestsDialog
+        width: 460
+        height: 420
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
+        header: Item {
+            height: 40
+            Text { anchors.centerIn: parent; text: "我的兴趣"; color: Theme.text; font.pixelSize: 16; font.bold: true }
+            AppButton {
+                anchors.right: parent.right; anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
+                onClicked: interestsDialog.close()
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            ListView {
+                id: interestsListView
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                spacing: 4
+                model: aiService.interestList()
+                delegate: RowLayout {
+                    width: interestsListView.width
+                    spacing: 8
+                    Text {
+                        Layout.fillWidth: true
+                        text: modelData
+                        color: Theme.text
+                        font.pixelSize: 12
+                    }
+                    AppButton {
+                        text: "删"
+                        implicitWidth: 34; implicitHeight: 30
+                        onClicked: {
+                            aiService.removeInterest(modelData)
+                            interestsListView.model = aiService.interestList()
+                        }
+                    }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                TextField {
+                    id: interestInput
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
+                    color: Theme.text
+                    placeholderText: "添加一个兴趣（如 Minecraft）..."
+                    background: Rectangle { color: Theme.inputBg; radius: 8 }
+                }
+                AppButton {
+                    text: "添加"
+                    implicitHeight: 36
+                    onClicked: {
+                        aiService.addInterest(interestInput.text)
+                        interestInput.text = ""
+                        interestsListView.model = aiService.interestList()
+                    }
+                }
+            }
+        }
+    }
+
+    // 未完成话题：列表 + 增删
+    Dialog {
+        id: topicsDialog
+        width: 460
+        height: 420
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
+        header: Item {
+            height: 40
+            Text { anchors.centerIn: parent; text: "未完成话题"; color: Theme.text; font.pixelSize: 16; font.bold: true }
+            AppButton {
+                anchors.right: parent.right; anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
+                onClicked: topicsDialog.close()
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            ListView {
+                id: topicsListView
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                spacing: 4
+                model: aiService.topicList()
+                delegate: RowLayout {
+                    width: topicsListView.width
+                    spacing: 8
+                    Text {
+                        Layout.fillWidth: true
+                        text: modelData
+                        color: Theme.text
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+                    AppButton {
+                        text: "删"
+                        implicitWidth: 34; implicitHeight: 30
+                        onClicked: {
+                            aiService.removeTopic(modelData)
+                            topicsListView.model = aiService.topicList()
+                        }
+                    }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                TextField {
+                    id: topicInput
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
+                    color: Theme.text
+                    placeholderText: "添加一个聊到一半的话题..."
+                    background: Rectangle { color: Theme.inputBg; radius: 8 }
+                }
+                AppButton {
+                    text: "添加"
+                    implicitHeight: 36
+                    onClicked: {
+                        aiService.addTopic(topicInput.text)
+                        topicInput.text = ""
+                        topicsListView.model = aiService.topicList()
+                    }
+                }
             }
         }
     }

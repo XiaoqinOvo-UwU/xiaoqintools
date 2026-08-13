@@ -40,25 +40,33 @@ public:
     Q_INVOKABLE void setAiMood(const QString &mood); // update AI mood (continuity)
     Q_INVOKABLE void adjustAiEnergy(int delta);      // energy after interactions
 
-    // generic state accessor for the friendly UI (avoids many one-off methods)
-    Q_INVOKABLE int stateInt(const QString &key);    // 0-100 int field
-    Q_INVOKABLE QString stateStr(const QString &key);// string field (mood, reply_style)
-    Q_INVOKABLE void setStateInt(const QString &key, int v);
-    Q_INVOKABLE void setStateStr(const QString &key, const QString &v);
-
     // ---- batch B: personality + relationship ----
     Q_INVOKABLE QString personalityText();   // structured traits/style from personality.json
     Q_INVOKABLE QString personalityRaw();    // full personality.json as text (for editing)
     Q_INVOKABLE void setPersonalityRaw(const QString &json); // replace personality.json
+    Q_INVOKABLE int personaTrait(const QString &key);      // trait value 0-100
+    Q_INVOKABLE void setPersonaTrait(const QString &key, int v);
+    Q_INVOKABLE QString personaStyle(const QString &key);  // style field
+    Q_INVOKABLE void setPersonaStyle(const QString &key, const QString &v);
     Q_INVOKABLE QString relationshipText();  // relationship continuity for prompt
     Q_INVOKABLE void bumpRelationship(int intimacyDelta, int trustDelta);
     Q_INVOKABLE void setRelationship(int intimacy, int trust); // manual override
+    Q_INVOKABLE int relationshipIntimacy();
+    Q_INVOKABLE int relationshipTrust();
     Q_INVOKABLE QString interestsRaw();      // interests.json as text
     Q_INVOKABLE void setInterestsRaw(const QString &json);
+    Q_INVOKABLE QStringList interestList();  // friendly list
+    Q_INVOKABLE void addInterest(const QString &name);
+    Q_INVOKABLE void removeInterest(const QString &name);
     Q_INVOKABLE QString unfinishedRaw();     // unfinished_topics.json as text
     Q_INVOKABLE void setUnfinishedRaw(const QString &json);
+    Q_INVOKABLE QStringList topicList();     // friendly list
+    Q_INVOKABLE void addTopic(const QString &topic);
+    Q_INVOKABLE void removeTopic(const QString &topic);
     Q_INVOKABLE void setAiEnergy(int energy); // manual energy override
     Q_INVOKABLE QString notesText();        // user notes only
+    Q_INVOKABLE QStringList noteList();     // friendly list
+    Q_INVOKABLE void removeNote(int index);
     Q_INVOKABLE QString usageText();        // usage duration only
 
     // user profile passthrough (stored in config)

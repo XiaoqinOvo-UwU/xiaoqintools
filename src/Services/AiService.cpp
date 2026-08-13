@@ -26,6 +26,10 @@
 
 // forward decls for helpers defined later in this file
 static QJsonObject readAiState();
+static QString unfinishedPath();
+static QString interestPath();
+static QString personalityPath();
+static QJsonObject readRelationship();
 
 AiService::AiService(QObject *parent)
     : QObject(parent)
@@ -1493,33 +1497,193 @@ void AiService::adjustAiEnergy(int delta)
     writeAiState(o);
 }
 
-// generic state accessors (friendly UI)
-int AiService::stateInt(const QString &key)
+// ---- persona trait/style accessors (friendly UI) ----
+int AiService::personaTrait(const QString &key)
 {
-    QJsonObject o = readAiState();
-    if (key == "tenderness") return o.value("tenderness").toInt(70);
-    if (key == "energy") return o.value("energy").toInt(70);
-    if (key == "companion") return o.value("companion").toInt(70);
-    return 0;
+    QFile f(personalityPath());
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        f.close();
+        if (d.isObject()) {
+            QJsonObject traits = d.object().value("traits").toObject();
+            if (traits.contains(key)) return traits.value(key).toInt();
+        }
+    }
+    // defaults
+    if (key == "温柔") return 90;
+    if (key == "傲娇") return 60;
+    if (key == "幽默") return 50;
+    if (key == "依赖") return 70;
+    if (key == "成熟") return 85;
+    return 50;
 }
-QString AiService::stateStr(const QString &key)
+
+void AiService::setPersonaTrait(const QString &key, int v)
 {
-    QJsonObject o = readAiState();
-    if (key == "mood") return o.value("mood").toString("calm");
-    if (key == "reply_style") return o.value("reply_style").toString("natural");
+    QJsonObject o;
+    QFile rf(personalityPath());
+    if (rf.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(rf.readAll());
+        if (d.isObject()) o = d.object();
+        rf.close();
+    }
+    QJsonObject traits = o.value("traits").toObject();
+    traits.insert(key, qBound(0, v, 100));
+    o.insert("traits", traits);
+    QFile f(personalityPath());
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(QJsonDocument(o).toJson());
+        f.close();
+    }
+}
+
+QString AiService::personaStyle(const QString &key)
+{
+    QFile f(personalityPath());
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        f.close();
+        if (d.isObject()) {
+            QJsonObject style = d.object().value("style").toObject();
+            if (style.contains(key)) return style.value(key).toString();
+        }
+    }
     return QString();
 }
-void AiService::setStateInt(const QString &key, int v)
+
+void AiService::setPersonaStyle(const QString &key, const QString &v)
 {
-    QJsonObject o = readAiState();
-    o.insert(key, qBound(0, v, 100));
-    writeAiState(o);
+    QJsonObject o;
+    QFile rf(personalityPath());
+    if (rf.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(rf.readAll());
+        if (d.isObject()) o = d.object();
+        rf.close();
+    }
+    QJsonObject style = o.value("style").toObject();
+    style.insert(key, v);
+    o.insert("style", style);
+    QFile f(personalityPath());
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(QJsonDocument(o).toJson());
+        f.close();
+    }
 }
-void AiService::setStateStr(const QString &key, const QString &v)
+
+int AiService::relationshipIntimacy()
 {
-    QJsonObject o = readAiState();
-    o.insert(key, v);
-    writeAiState(o);
+    QJsonObject o = readRelationship();
+    return o.value("intimacy").toInt();
+}
+int AiService::relationshipTrust()
+{
+    QJsonObject o = readRelationship();
+    return o.value("trust").toInt();
+}
+
+// ---- friendly interest list ----
+QStringList AiService::interestList()
+{
+    QFile f(interestPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
+    QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    if (!d.isObject()) return {};
+    return d.object().keys();
+}
+void AiService::addInterest(const QString &name)
+{
+    QString n = name.trimmed();
+    if (n.isEmpty()) return;
+    QJsonObject o;
+    QFile f(interestPath());
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        if (d.isObject()) o = d.object();
+        f.close();
+    }
+    int cur = o.value(n).toInt();
+    o.insert(n, cur + 1);
+    QFile wf(interestPath());
+    if (wf.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        wf.write(QJsonDocument(o).toJson());
+        wf.close();
+    }
+}
+void AiService::removeInterest(const QString &name)
+{
+    QJsonObject o;
+    QFile f(interestPath());
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        if (d.isObject()) o = d.object();
+        f.close();
+    }
+    o.remove(name);
+    QFile wf(interestPath());
+    if (wf.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        wf.write(QJsonDocument(o).toJson());
+        wf.close();
+    }
+}
+
+// ---- friendly topic list ----
+QStringList AiService::topicList()
+{
+    QFile f(unfinishedPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
+    QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    if (!d.isArray()) return {};
+    QStringList out;
+    for (const QJsonValue &v : d.array())
+        out << v.toObject().value("topic").toString();
+    return out;
+}
+void AiService::addTopic(const QString &topic)
+{
+    trackUnfinishedTopic(topic, 80);
+}
+void AiService::removeTopic(const QString &topic)
+{
+    QFile f(unfinishedPath());
+    QJsonArray arr;
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
+        if (d.isArray()) arr = d.array();
+        f.close();
+    }
+    QJsonArray kept;
+    for (const QJsonValue &v : arr)
+        if (v.toObject().value("topic").toString() != topic) kept.append(v);
+    QFile wf(unfinishedPath());
+    if (wf.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        wf.write(QJsonDocument(kept).toJson());
+        wf.close();
+    }
+}
+
+// ---- friendly note list ----
+QStringList AiService::noteList()
+{
+    QJsonDocument d = QJsonDocument::fromJson(readMemory().toUtf8());
+    if (!d.isObject()) return {};
+    QStringList out;
+    for (const QJsonValue &v : d.object().value("notes").toArray())
+        out << v.toString();
+    return out;
+}
+void AiService::removeNote(int index)
+{
+    QString mem = readMemory();
+    QJsonDocument d = QJsonDocument::fromJson(mem.toUtf8());
+    if (!d.isObject()) return;
+    QJsonObject o = d.object();
+    QJsonArray notes = o.value("notes").toArray();
+    if (index < 0 || index >= notes.size()) return;
+    notes.removeAt(index);
+    o.insert("notes", notes);
+    writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
 }
 
 // ---- unfinished topics ----
