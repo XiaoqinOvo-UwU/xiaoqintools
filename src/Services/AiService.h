@@ -36,9 +36,21 @@ public:
     Q_INVOKABLE QString unfinishedTopicsText(int max); // recent unfinished topics for prompt
     Q_INVOKABLE void recordInterest(const QString &interest); // bump interest weight
     Q_INVOKABLE QString interestsText(int max); // top interests for prompt
-    Q_INVOKABLE QString aiStateJson();       // {"mood":"calm","energy":80}
+    Q_INVOKABLE QString aiStateJson();       // {"mood":"calm","energy":80,...}
     Q_INVOKABLE void setAiMood(const QString &mood); // update AI mood (continuity)
     Q_INVOKABLE void adjustAiEnergy(int delta);      // energy after interactions
+
+    // ---- AI state friendly accessors (Slider/ComboBox friendly) ----
+    Q_INVOKABLE int tenderness();       // 0-100 (温柔程度)
+    Q_INVOKABLE int energy();           // 0-100 (活跃程度)
+    Q_INVOKABLE int companion();        // 0-100 (陪伴倾向)
+    Q_INVOKABLE QString moodText();     // "calm"/"happy"/"gentle"/"low"/"active"
+    Q_INVOKABLE QString replyStyle();   // "short"/"natural"/"detailed"
+    Q_INVOKABLE void setTenderness(int v);
+    Q_INVOKABLE void setEnergy(int v);
+    Q_INVOKABLE void setCompanion(int v);
+    Q_INVOKABLE void setMoodText(const QString &m);
+    Q_INVOKABLE void setReplyStyle(const QString &s);
 
     // ---- batch B: personality + relationship ----
     Q_INVOKABLE QString personalityText();   // structured traits/style from personality.json

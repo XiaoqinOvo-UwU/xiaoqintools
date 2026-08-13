@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.8"
+                        text: "小钦的工具 v3.5.9"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -625,17 +625,20 @@ ApplicationWindow {
                 }
                 Text { text: "AI 人设"; color: Theme.textDim; font.pixelSize: 12 }
                 // fixed-height text area: content scrolls inside instead of
-                // growing the dialog (long personas no longer stretch the window)
+                // growing the dialog (long personas no longer stretch the window).
+                // implicitHeight is pinned so the layout can never be pushed open.
                 TextArea {
                     id: profileAiPersonality
                     Layout.fillWidth: true
                     Layout.preferredHeight: 160
                     Layout.minimumHeight: 80
                     Layout.maximumHeight: 240
+                    implicitHeight: 160
                     color: Theme.text
                     text: aiService.aiPersonality()
                     wrapMode: TextEdit.Wrap
                     background: Rectangle { color: Theme.inputBg; radius: 8 }
+                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -782,8 +785,8 @@ ApplicationWindow {
                 AppButton {
                     Layout.fillWidth: true
                     implicitHeight: 40
-                    text: "⚡ AI 状态（心情与精力，可编辑）"
-                    onClicked: { memoryCat.openCat("AI状态", aiService.aiStateJson(), true) }
+                    text: "⚡ AI 状态（温柔/活跃/心情，可调整）"
+                    onClicked: { aiStateDialog.open() }
                 }
                 // 兴趣
                 AppButton {
@@ -899,20 +902,167 @@ ApplicationWindow {
                             return
                         } catch (e) { islandToast.show("格式错误：需要 {\"intimacy\":70,\"trust\":80}") }
                     }
-                    else if (memoryCat.catTitle === "AI状态") {
-                        // simple: expect {"mood":"..","energy":N}
-                        try {
-                            var obj = JSON.parse(t)
-                            if (obj.mood) aiService.setAiMood(obj.mood)
-                            if (obj.energy !== undefined) aiService.setAiEnergy(parseInt(obj.energy))
-                            islandToast.show("AI 状态已更新~")
-                            memoryCat.close()
-                            return
-                        } catch (e) { islandToast.show("格式错误：需要 {\"mood\":\"..\",\"energy\":N}") }
-                    }
                     islandToast.show(memoryCat.catTitle + " 已保存~")
                     memoryCat.close()
                 }
+            }
+        }
+    }
+
+    // ================= AI STATE DIALOG (friendly sliders/combos, no JSON) =================
+    Dialog {
+        id: aiStateDialog
+        width: 440
+        height: 520
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle {
+            color: Theme.surface
+            radius: 14
+            border.color: Theme.glassBorder
+            border.width: 1
+        }
+        header: Item {
+            height: 40
+            Text {
+                anchors.centerIn: parent
+                text: "AI 状态"
+                color: Theme.text
+                font.pixelSize: 16
+                font.bold: true
+            }
+            AppButton {
+                anchors.right: parent.right
+                anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✕"
+                implicitWidth: 30
+                implicitHeight: 30
+                btnRadius: 15
+                onClicked: aiStateDialog.close()
+            }
+        }
+        contentItem: ColumnLayout {
+            anchors.fill: parent
+            spacing: 14
+
+            // 温柔程度
+            Text { text: "温柔程度"; color: Theme.text; font.pixelSize: 13; font.bold: true }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Slider {
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    value: aiService.tenderness()
+                    onValueChanged: aiService.setTenderness(value)
+                }
+                Text {
+                    text: aiService.tenderness()
+                    color: Theme.textDim
+                    font.pixelSize: 12
+                    Layout.preferredWidth: 30
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+
+            // 活跃程度
+            Text { text: "活跃程度"; color: Theme.text; font.pixelSize: 13; font.bold: true }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Slider {
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    value: aiService.energy()
+                    onValueChanged: aiService.setEnergy(value)
+                }
+                Text {
+                    text: aiService.energy()
+                    color: Theme.textDim
+                    font.pixelSize: 12
+                    Layout.preferredWidth: 30
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+
+            // 陪伴倾向
+            Text { text: "陪伴倾向"; color: Theme.text; font.pixelSize: 13; font.bold: true }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Slider {
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    value: aiService.companion()
+                    onValueChanged: aiService.setCompanion(value)
+                }
+                Text {
+                    text: aiService.companion()
+                    color: Theme.textDim
+                    font.pixelSize: 12
+                    Layout.preferredWidth: 30
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+
+            // 当前心情
+            Text { text: "当前心情"; color: Theme.text; font.pixelSize: 13; font.bold: true }
+            ComboBox {
+                id: moodCombo
+                Layout.fillWidth: true
+                model: [
+                    { text: "平静", value: "calm" },
+                    { text: "开心", value: "happy" },
+                    { text: "温柔", value: "gentle" },
+                    { text: "低落", value: "low" },
+                    { text: "活跃", value: "active" }
+                ]
+                textRole: "text"
+                valueRole: "value"
+                Component.onCompleted: {
+                    for (var i = 0; i < model.length; i++)
+                        if (model[i].value === aiService.moodText()) { currentIndex = i; break }
+                }
+                onActivated: {
+                    var idx = moodCombo.currentIndex
+                    var m = moodCombo.model[idx]
+                    aiService.setMoodText(m.value)
+                }
+            }
+
+            // 回复风格
+            Text { text: "回复风格"; color: Theme.text; font.pixelSize: 13; font.bold: true }
+            ComboBox {
+                id: styleCombo
+                Layout.fillWidth: true
+                model: [
+                    { text: "简短", value: "short" },
+                    { text: "自然", value: "natural" },
+                    { text: "详细", value: "detailed" }
+                ]
+                textRole: "text"
+                valueRole: "value"
+                Component.onCompleted: {
+                    for (var j = 0; j < model.length; j++)
+                        if (model[j].value === aiService.replyStyle()) { currentIndex = j; break }
+                }
+                onActivated: {
+                    var idx2 = styleCombo.currentIndex
+                    var m2 = styleCombo.model[idx2]
+                    aiService.setReplyStyle(m2.value)
+                }
+            }
+
+            Item { Layout.fillHeight: true }
+
+            Text {
+                Layout.fillWidth: true
+                text: "拖动滑块或选择选项即可调整，改动实时生效"
+                color: Theme.textDim
+                font.pixelSize: 11
+                horizontalAlignment: Text.AlignHCenter
             }
         }
     }

@@ -1012,7 +1012,11 @@ void AiService::sendMessage(const QString &text)
         + "【我记得的共同经历】（以下是你确实知道的事，只能引用这些，不许编造）\n" + (eventMemoryText(5).isEmpty() ? QString("（还没有太多回忆，慢慢积累）") : eventMemoryText(5))
         + "\n【你感兴趣的事】（来自你的聊天，是历史记录）\n" + (interestsText(4).isEmpty() ? QString("（还在慢慢了解你）") : interestsText(4))
         + "\n【还没聊完的话题】\n" + (unfinishedTopicsText(3).isEmpty() ? QString("（暂无）") : unfinishedTopicsText(3))
-        + "\n【我此刻的状态】" + aiStateJson();
+        + "\n【我此刻的状态】温柔程度" + QString::number(tenderness())
+          + "/100，活跃程度" + QString::number(energy())
+          + "/100，陪伴倾向" + QString::number(companion())
+          + "/100，当前心情：" + moodText()
+          + "，回复风格：" + replyStyle() + "（short=简短，natural=自然，detailed=详细）";
 
     // Bucket 2: memory + current state, flattened bullet list.
     // Only data tagged [真实读取] is a verified fact; the rest is history or guess.
@@ -1490,6 +1494,44 @@ void AiService::adjustAiEnergy(int delta)
     QJsonObject o = readAiState();
     int e = qBound(0, o.value("energy").toInt() + delta, 100);
     o.insert("energy", e);
+    writeAiState(o);
+}
+
+// ---- friendly AI-state accessors ----
+int AiService::tenderness() { return readAiState().value("tenderness").toInt(70); }
+int AiService::energy()     { return readAiState().value("energy").toInt(70); }
+int AiService::companion()  { return readAiState().value("companion").toInt(70); }
+QString AiService::moodText() { return readAiState().value("mood").toString("calm"); }
+QString AiService::replyStyle() { return readAiState().value("reply_style").toString("natural"); }
+
+void AiService::setTenderness(int v)
+{
+    QJsonObject o = readAiState();
+    o.insert("tenderness", qBound(0, v, 100));
+    writeAiState(o);
+}
+void AiService::setEnergy(int v)
+{
+    QJsonObject o = readAiState();
+    o.insert("energy", qBound(0, v, 100));
+    writeAiState(o);
+}
+void AiService::setCompanion(int v)
+{
+    QJsonObject o = readAiState();
+    o.insert("companion", qBound(0, v, 100));
+    writeAiState(o);
+}
+void AiService::setMoodText(const QString &m)
+{
+    QJsonObject o = readAiState();
+    o.insert("mood", m);
+    writeAiState(o);
+}
+void AiService::setReplyStyle(const QString &s)
+{
+    QJsonObject o = readAiState();
+    o.insert("reply_style", s);
     writeAiState(o);
 }
 
