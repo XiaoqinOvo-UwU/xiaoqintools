@@ -980,14 +980,19 @@ ApplicationWindow {
             //  - late night (23-05) -> lower the idle threshold for more company
             //  - otherwise -> 8 min of real idle
             //  - very long away (>30 min) -> also chat ("回来啦")
+            var nowIdleMs = aiService.lastInputMs()
+            if (nowIdleMs < 0) nowIdleMs = Date.now() - root.lastInteraction
+            // once the user is active again (idle < 2 min), allow a future idle chat
+            if (nowIdleMs < 2 * 60 * 1000)
+                root.idleChatDone = false
+
             if (!root.idleChatDone) {
                 var shouldChat = false
                 if (aiService.isForegroundMinecraft()) {
                     if (!root.lastIdleChatAt || Date.now() - root.lastIdleChatAt >= 60 * 1000)
                         shouldChat = true
                 } else {
-                    var idleMs = aiService.lastInputMs()
-                    if (idleMs < 0) idleMs = Date.now() - root.lastInteraction
+                    var idleMs = nowIdleMs
                     var h = new Date().getHours()
                     var lateNight = (h >= 23 || h < 5)
                     var threshold = lateNight ? 4 * 60 * 1000 : 8 * 60 * 1000
