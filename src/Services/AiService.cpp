@@ -418,6 +418,54 @@ bool AiService::isGameRunning()
     return false;
 }
 
+// ---- is the foreground window a fullscreen game? (any game, not just a known list) ----
+bool AiService::isFullscreenGame()
+{
+#ifdef Q_OS_WIN
+    HWND hwnd = GetForegroundWindow();
+    if (!hwnd) return false;
+    if (!IsWindowVisible(hwnd)) return false;
+
+    // ignore our own window
+    DWORD ourPid = GetCurrentProcessId();
+    DWORD winPid = 0;
+    GetWindowThreadProcessId(hwnd, &winPid);
+    if (winPid == ourPid) return false;
+
+    RECT r;
+    if (!GetClientRect(hwnd, &r)) return false;
+    int w = r.right - r.left;
+    int h = r.bottom - r.top;
+    // treat as fullscreen when it covers the primary screen (>= 98% of each dimension)
+    int sw = GetSystemMetrics(SM_CXSCREEN);
+    int sh = GetSystemMetrics(SM_CYSCREEN);
+    return w >= sw * 98 / 100 && h >= sh * 98 / 100;
+#else
+    return false;
+#endif
+}
+
+// ---- is the foreground window Minecraft? ----
+bool AiService::isForegroundMinecraft()
+{
+#ifdef Q_OS_WIN
+    HWND hwnd = GetForegroundWindow();
+    if (!hwnd) return false;
+    if (!IsWindowVisible(hwnd)) return false;
+    DWORD ourPid = GetCurrentProcessId();
+    DWORD winPid = 0;
+    GetWindowThreadProcessId(hwnd, &winPid);
+    if (winPid == ourPid) return false;
+    wchar_t buf[512];
+    int len = GetWindowTextW(hwnd, buf, 512);
+    if (len <= 0) return false;
+    QString t = QString::fromWCharArray(buf, len).trimmed();
+    return t.contains("Minecraft", Qt::CaseInsensitive);
+#else
+    return false;
+#endif
+}
+
 // ---- system-wide idle: ms since the last keyboard/mouse input ----
 qint64 AiService::lastInputMs()
 {
@@ -469,6 +517,7 @@ void AiService::idleChat()
     QString personality = ContactService::instance().currentPersonality();
     QString activity = activitySummary(); // already cheap (in-memory/JSON)
     QString fg = foregroundApp();         // cheap win32 call
+    QString recent = m_chatBuffer.join("\n"); // last few messages if any
 
     auto *watcher = new QFutureWatcher<QString>(this);
     connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
@@ -489,7 +538,7 @@ void AiService::idleChat()
     });
     // collect the process snapshot in the worker thread (one tasklist call,
     // only on idle trigger — zero cost during normal use)
-    QFuture<QString> future = QtConcurrent::run([mem, user, ai, personality, activity, fg]() {
+    QFuture<QString> future = QtConcurrent::run([mem, user, ai, personality, activity, fg, recent]() {
         QString procs = processSnapshot();
         QStringList ctx;
         if (!activity.isEmpty() && !activity.startsWith("（"))
@@ -498,9 +547,14 @@ void AiService::idleChat()
             ctx << "- 用户当前正在使用：" + fg;
         if (!procs.isEmpty())
             ctx << "- 用户电脑正在运行的进程（节选）：" + procs;
+        QString recentBlock;
+        if (!recent.isEmpty())
+            recentBlock = "\n你们最近聊的：\n" + recent + "\n";
         QString prompt = "你是" + ai + "，性格" + personality + "。用户" + user + "已经有一会儿没操作电脑了。\n"
             + ctx.join("\n")
-            + "\n请结合上面的信息，自然地主动找个话题和ta聊一句（比如聊聊ta在玩/在做的、关心的、或随便分享），"
+            + recentBlock
+            + "\n请结合上面的信息（尤其是最近聊天的内容），自然地主动找个话题和ta聊一句，"
+              "可以接着上次聊的话题，也可以聊聊ta在玩/在做的、关心的、或随便分享。"
               "像朋友一样，简短一句话，不要生硬，不要罗列数据。\n"
               "你可以参考记忆：\n" + mem + "\n只输出这句话本身。";
         return callDeepSeekStatic("你是温柔可爱的AI陪伴者。", prompt);

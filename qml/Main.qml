@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.4.0"
+                        text: "小钦的工具 v3.4.1"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -955,6 +955,7 @@ ApplicationWindow {
     // ================= IDLE DETECTION (10min no interaction + no game -> AI chats) =================
     property int lastInteraction: Date.now()
     property bool idleChatDone: false
+    property int lastIdleChatAt: 0
 
     // reset idle timer when window regains focus / user interacts
     onActiveChanged: {
@@ -973,14 +974,29 @@ ApplicationWindow {
         interval: 30000
         repeat: true
         onTriggered: {
-            // system-wide idle time (ms since last keyboard/mouse input anywhere),
-            // not just window focus — the old focus-based check fired even while
-            // the user was actively typing in the app.
-            var idleMs = aiService.lastInputMs()
-            if (idleMs < 0) idleMs = Date.now() - root.lastInteraction
-            if (idleMs >= 10 * 60 * 1000 && !root.idleChatDone) {
-                if (!aiService.isGameRunning()) {
+            // Companion mode ONLY for Minecraft in the foreground -> chat after
+            // a short delay. Everything else (any other game, normal apps) waits
+            // for 8 minutes of real system-wide idle. No "don't disturb" list.
+            if (!root.idleChatDone) {
+                var shouldChat = false
+                if (aiService.isForegroundMinecraft()) {
+                    // playing Minecraft: don't wait for idle (keys are always pressed)
+                    // but don't spam — at least a minute since the last chat
+                    if (!root.lastIdleChatAt || Date.now() - root.lastIdleChatAt >= 60 * 1000)
+                        shouldChat = true
+                } else {
+                    var idleMs = aiService.lastInputMs()
+                    if (idleMs < 0) idleMs = Date.now() - root.lastInteraction
+                    shouldChat = idleMs >= 8 * 60 * 1000
+                }
+                if (shouldChat) {
                     root.idleChatDone = true
+                    root.lastIdleChatAt = Date.now()
+                    // feed the AI the last 3 chat messages so it can start a
+                    // topic based on what was actually being discussed
+                    var recent = chatPage.recentMessages(3)
+                    if (recent.length > 0)
+                        aiService.setChatHistory(recent.join("\n"))
                     aiService.idleChat()
                     islandToast.show(aiService.aiName() + "想找你聊聊~", 6000)
                 }

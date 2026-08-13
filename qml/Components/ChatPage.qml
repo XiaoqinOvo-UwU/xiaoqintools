@@ -105,6 +105,18 @@ Rectangle {
     signal closeFinished()
     signal aiProfileRequested()
 
+    // return the last N messages as "角色: 内容" lines (newest last)
+    function recentMessages(n) {
+        var out = []
+        var start = Math.max(0, msgModel.count - n)
+        for (var i = start; i < msgModel.count; i++) {
+            var m = msgModel.get(i)
+            var who = m.isAi ? aiService.aiName() : (aiService.userName() || "用户")
+            out.push(who + ": " + m.msg)
+        }
+        return out
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0

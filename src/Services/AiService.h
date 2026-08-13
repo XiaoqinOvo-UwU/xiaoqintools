@@ -23,6 +23,8 @@ public:
     Q_INVOKABLE QString uptimeText();        // how long the PC has been on
     Q_INVOKABLE void generateGreeting();     // async: DeepSeek writes greeting -> greetingReady
     Q_INVOKABLE bool isGameRunning();        // detects r5apex / minecraft etc.
+    Q_INVOKABLE bool isFullscreenGame();     // foreground window covers the whole screen (any game)
+    Q_INVOKABLE bool isForegroundMinecraft(); // foreground window is Minecraft
     Q_INVOKABLE void idleChat();             // async: AI initiates a topic -> chatReply
     Q_INVOKABLE qint64 lastInputMs();        // ms since the last keyboard/mouse input system-wide
 
