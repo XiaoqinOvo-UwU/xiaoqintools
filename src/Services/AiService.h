@@ -42,8 +42,18 @@ public:
 
     // ---- batch B: personality + relationship ----
     Q_INVOKABLE QString personalityText();   // structured traits/style from personality.json
+    Q_INVOKABLE QString personalityRaw();    // full personality.json as text (for editing)
+    Q_INVOKABLE void setPersonalityRaw(const QString &json); // replace personality.json
     Q_INVOKABLE QString relationshipText();  // relationship continuity for prompt
     Q_INVOKABLE void bumpRelationship(int intimacyDelta, int trustDelta);
+    Q_INVOKABLE void setRelationship(int intimacy, int trust); // manual override
+    Q_INVOKABLE QString interestsRaw();      // interests.json as text
+    Q_INVOKABLE void setInterestsRaw(const QString &json);
+    Q_INVOKABLE QString unfinishedRaw();     // unfinished_topics.json as text
+    Q_INVOKABLE void setUnfinishedRaw(const QString &json);
+    Q_INVOKABLE void setAiEnergy(int energy); // manual energy override
+    Q_INVOKABLE QString notesText();        // user notes only
+    Q_INVOKABLE QString usageText();        // usage duration only
 
     // user profile passthrough (stored in config)
     Q_INVOKABLE QString userName();

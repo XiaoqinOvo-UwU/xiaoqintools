@@ -1729,3 +1729,124 @@ void AiService::bumpRelationship(int intimacyDelta, int trustDelta)
         f.close();
     }
 }
+
+// ================= Batch: editable categories for the memory UI =================
+
+QString AiService::personalityRaw()
+{
+    QFile f(personalityPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return "{}";
+    QString s = QString::fromUtf8(f.readAll());
+    f.close();
+    return s;
+}
+
+void AiService::setPersonalityRaw(const QString &json)
+{
+    QJsonParseError pe;
+    QJsonDocument d = QJsonDocument::fromJson(json.toUtf8(), &pe);
+    if (pe.error != QJsonParseError::NoError || !d.isObject()) return; // keep old on invalid
+    QFile f(personalityPath());
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(d.toJson());
+        f.close();
+    }
+}
+
+void AiService::setRelationship(int intimacy, int trust)
+{
+    QJsonObject o = readRelationship();
+    o.insert("intimacy", qBound(0, intimacy, 100));
+    o.insert("trust", qBound(0, trust, 100));
+    o.insert("interaction_days", o.value("interaction_days").toInt());
+    QDir().mkpath(ContactService::instance().contactDir(ContactService::instance().currentId()));
+    QFile f(relationshipPathB());
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(QJsonDocument(o).toJson());
+        f.close();
+    }
+}
+
+QString AiService::interestsRaw()
+{
+    QFile f(interestPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return "{}";
+    QString s = QString::fromUtf8(f.readAll());
+    f.close();
+    return s;
+}
+
+void AiService::setInterestsRaw(const QString &json)
+{
+    QJsonParseError pe;
+    QJsonDocument d = QJsonDocument::fromJson(json.toUtf8(), &pe);
+    if (pe.error != QJsonParseError::NoError || !d.isObject()) return;
+    QFile f(interestPath());
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(d.toJson());
+        f.close();
+    }
+}
+
+QString AiService::unfinishedRaw()
+{
+    QFile f(unfinishedPath());
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return "[]";
+    QString s = QString::fromUtf8(f.readAll());
+    f.close();
+    return s;
+}
+
+void AiService::setUnfinishedRaw(const QString &json)
+{
+    QJsonParseError pe;
+    QJsonDocument d = QJsonDocument::fromJson(json.toUtf8(), &pe);
+    if (pe.error != QJsonParseError::NoError || !d.isArray()) return;
+    QFile f(unfinishedPath());
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write(d.toJson());
+        f.close();
+    }
+}
+
+void AiService::setAiEnergy(int energy)
+{
+    QJsonObject o = readAiState();
+    o.insert("energy", qBound(0, energy, 100));
+    writeAiState(o);
+}
+
+// user notes only
+QString AiService::notesText()
+{
+    QJsonDocument d = QJsonDocument::fromJson(readMemory().toUtf8());
+    QJsonObject o = d.isObject() ? d.object() : QJsonObject();
+    QJsonArray notes = o.value("notes").toArray();
+    QStringList lines;
+    if (notes.isEmpty()) return "（还没有笔记，点开聊天页可以告诉我值得记住的事）";
+    for (const QJsonValue &v : notes)
+        lines << "· " + v.toString();
+    return lines.join("\n");
+}
+
+// usage duration only
+QString AiService::usageText()
+{
+    QJsonDocument d = QJsonDocument::fromJson(readMemory().toUtf8());
+    QJsonObject o = d.isObject() ? d.object() : QJsonObject();
+    QStringList lines;
+    int shown = 0;
+    for (int i = 6; i >= 0; i--) {
+        QString day = QDate::currentDate().addDays(-i).toString("yyyy-MM-dd");
+        QString key = "usageMinutes_" + day;
+        int mins = o.value(key).toInt();
+        if (mins > 0) {
+            int h = mins / 60, m = mins % 60;
+            lines << (h > 0 ? QString("%1：%2 小时 %3 分钟").arg(day).arg(h).arg(m)
+                            : QString("%1：%2 分钟").arg(day).arg(m));
+            shown++;
+        }
+    }
+    if (shown == 0) return "（暂无时长记录）";
+    return lines.join("\n");
+}

@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.6"
+                        text: "小钦的工具 v3.5.7"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -702,10 +702,11 @@ ApplicationWindow {
     }
 
     // ================= MEMORY DIALOGS =================
+    // main memory dialog: category list, each opens its own viewer/editor
     Dialog {
         id: memoryDialog
-        width: 460
-        height: 420
+        width: 500
+        height: 480
         modal: true
         x: (root.width - width) / 2
         y: (root.height - height) / 2
@@ -738,19 +739,178 @@ ApplicationWindow {
         contentItem: ScrollView {
             clip: true
             ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            ColumnLayout {
+                width: parent.width
+                spacing: 8
+
+                // 用户笔记
+                AppButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    text: "📝 用户笔记（你告诉过我的事）"
+                    onClicked: { memoryCat.open("笔记", aiService.notesText(), false) }
+                }
+                // 共同经历
+                AppButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    text: "📌 共同经历（事件记忆）"
+                    onClicked: { memoryCat.open("共同经历", aiService.eventMemoryText(50), false) }
+                }
+                // 人格
+                AppButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    text: "🎭 人格（性格特质与风格，可编辑）"
+                    onClicked: { memoryCat.open("人格", aiService.personalityRaw(), true) }
+                }
+                // 关系
+                AppButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    text: "💞 与我的关系（亲密度/信任度，可编辑）"
+                    onClicked: {
+                        // editable as {"intimacy":..,"trust":..}
+                        var json = '{\n  "intimacy": 70,\n  "trust": 80\n}'
+                        memoryCat.open("关系", json, true)
+                    }
+                }
+                // AI 状态
+                AppButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    text: "⚡ AI 状态（心情与精力，可编辑）"
+                    onClicked: { memoryCat.open("AI状态", aiService.aiStateJson(), true) }
+                }
+                // 兴趣
+                AppButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    text: "⭐ 我的兴趣（可编辑）"
+                    onClicked: { memoryCat.open("兴趣", aiService.interestsRaw(), true) }
+                }
+                // 未完成话题
+                AppButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    text: "💬 未完成话题（可编辑）"
+                    onClicked: { memoryCat.open("未完成话题", aiService.unfinishedRaw(), true) }
+                }
+                // 使用时长
+                AppButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 40
+                    text: "⏱ 使用时长"
+                    onClicked: { memoryCat.open("时长", aiService.usageText(), false) }
+                }
+            }
+        }
+    }
+
+    // generic category dialog: view-only or editable (JSON-ish text)
+    Dialog {
+        id: memoryCat
+        property string catTitle: ""
+        property bool editable: false
+        property bool isRelationship: false
+        width: 500
+        height: 460
+        modal: true
+        x: (root.width - width) / 2
+        y: (root.height - height) / 2
+        background: Rectangle {
+            color: Theme.surface
+            radius: 14
+            border.color: Theme.glassBorder
+            border.width: 1
+        }
+        function open(title, content, edit, rel) {
+            memoryCat.catTitle = title
+            memoryCat.editable = edit
+            memoryCat.isRelationship = rel || false
+            catViewText.text = content
+            catEditText.text = content
+            catEditText.visible = edit
+            catViewText.visible = !edit
+            saveBtn.visible = edit
+            memoryCat.open()
+        }
+        header: Item {
+            height: 40
+            Text {
+                anchors.centerIn: parent
+                text: memoryCat.catTitle
+                color: Theme.text
+                font.pixelSize: 16
+                font.bold: true
+            }
+            AppButton {
+                anchors.right: parent.right
+                anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✕"
+                implicitWidth: 30
+                implicitHeight: 30
+                btnRadius: 15
+                onClicked: memoryCat.close()
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
             TextArea {
-                id: memoryViewText
+                id: catViewText
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 readOnly: true
                 color: Theme.text
                 font.pixelSize: 13
                 wrapMode: TextEdit.Wrap
-                text: ""
                 background: null
             }
-        }
-        onOpened: {
-            // always re-read the memory so the dialog shows fresh data
-            memoryViewText.text = aiService.memoryDetail()
+            TextArea {
+                id: catEditText
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: Theme.text
+                font.pixelSize: 12
+                wrapMode: TextEdit.Wrap
+                placeholderText: "可编辑的配置内容（JSON 格式）"
+            }
+            AppButton {
+                id: saveBtn
+                Layout.fillWidth: true
+                implicitHeight: 36
+                text: "💾 保存"
+                visible: false
+                onClicked: {
+                    var t = catEditText.text.trim()
+                    if (memoryCat.catTitle === "人格") aiService.setPersonalityRaw(t)
+                    else if (memoryCat.catTitle === "兴趣") aiService.setInterestsRaw(t)
+                    else if (memoryCat.catTitle === "未完成话题") aiService.setUnfinishedRaw(t)
+                    else if (memoryCat.catTitle === "关系") {
+                        try {
+                            var robj = JSON.parse(t)
+                            aiService.setRelationship(parseInt(robj.intimacy) || 0, parseInt(robj.trust) || 0)
+                            islandToast.show("关系已更新~")
+                            memoryCat.close()
+                            return
+                        } catch (e) { islandToast.show("格式错误：需要 {\"intimacy\":70,\"trust\":80}") }
+                    }
+                    else if (memoryCat.catTitle === "AI状态") {
+                        // simple: expect {"mood":"..","energy":N}
+                        try {
+                            var obj = JSON.parse(t)
+                            if (obj.mood) aiService.setAiMood(obj.mood)
+                            if (obj.energy !== undefined) aiService.setAiEnergy(parseInt(obj.energy))
+                            islandToast.show("AI 状态已更新~")
+                            memoryCat.close()
+                            return
+                        } catch (e) { islandToast.show("格式错误：需要 {\"mood\":\"..\",\"energy\":N}") }
+                    }
+                    islandToast.show(memoryCat.catTitle + " 已保存~")
+                    memoryCat.close()
+                }
+            }
         }
     }
 
