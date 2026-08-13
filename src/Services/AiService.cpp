@@ -964,8 +964,16 @@ QString AiService::callDeepSeekStatic(const QString &system, const QString &user
     req.setRawHeader("Authorization", ("Bearer " + key).toUtf8());
     QNetworkReply *reply = mgr.post(req, QJsonDocument(body).toJson());
     QEventLoop loop;
+    bool timedOut = false;
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    // don't hang forever if the network stalls (proxy down / slow API)
+    QTimer::singleShot(30000, &loop, [&loop, &timedOut]() { timedOut = true; loop.quit(); });
     loop.exec();
+    if (timedOut) {
+        reply->abort();
+        reply->deleteLater();
+        return "（请求超时了，检查一下网络或代理~）";
+    }
     QByteArray data = reply->readAll();
     reply->deleteLater();
     QJsonParseError pe;

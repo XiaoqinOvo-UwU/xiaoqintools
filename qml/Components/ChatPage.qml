@@ -314,7 +314,10 @@ Rectangle {
                         placeholderTextColor: Theme.textDim
                         background: null
                         font.pixelSize: 13
-                        padding: 12
+                        leftPadding: 16
+                        rightPadding: 16
+                        topPadding: 0
+                        bottomPadding: 0
                         verticalAlignment: Text.AlignVCenter
                         onAccepted: sendMsg()
                         onTextChanged: {
