@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.18"
+                        text: "小钦的工具 v3.5.19"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -1374,21 +1374,24 @@ ApplicationWindow {
         }
     }
 
-    // ================= IDLE DETECTION (10min no interaction + no game -> AI chats) =================
-    property int lastInteraction: Date.now()
-    property bool idleChatDone: false
-    property int lastIdleChatAt: 0
+    // ================= PROACTIVE CHAT (every ~30 min, randomized) =================
+    // AI proactively sends a message on a 25~35 min random schedule (~30 min
+    // base with jitter, so it never feels like clockwork).
+    // Coding/busy foreground never interrupted; the next attempt is scheduled
+    // from the moment a message was actually sent (no spam on game sessions).
+    property int nextProactiveAt: 0
 
-    // reset idle timer when window regains focus / user interacts
+    function scheduleNextProactive() {
+        var mins = 25 + Math.floor(Math.random() * 11) // 25..35 min
+        root.nextProactiveAt = Date.now() + mins * 60 * 1000
+    }
+
+    // reset the proactive schedule when the window regains focus / user interacts
     onActiveChanged: {
-        if (root.active) {
-            root.lastInteraction = Date.now()
-            root.idleChatDone = false
-        }
+        if (root.active) root.scheduleNextProactive()
     }
     function onUserActivity() {
-        root.lastInteraction = Date.now()
-        root.idleChatDone = false
+        root.scheduleNextProactive()
     }
 
     Timer {
@@ -1396,40 +1399,11 @@ ApplicationWindow {
         interval: 30000
         repeat: true
         onTriggered: {
-            // Smart companion triggers (consider busy state, software, time,
-            // recent chat, unfinished topics):
-            //  - coding / busy foreground -> never interrupt
-            //  - Minecraft foreground -> low-freq company (5 min cooldown)
-            //  - late night -> gentle company (4 min idle)
-            //  - otherwise -> 8 min real idle
-            //  - long away (>30 min) -> wait and greet on return
-            var state = aiService.userActivityState()
-            var nowIdleMs = aiService.lastInputMs()
-            if (nowIdleMs < 0) nowIdleMs = Date.now() - root.lastInteraction
-            // once the user is active again (idle < 2 min), allow a future idle
-            // chat. While gaming, keyboard/mouse stays active so input-based
-            // reset would re-arm every tick — the gaming cooldown handles that.
-            if (nowIdleMs < 2 * 60 * 1000 && state !== "gaming")
-                root.idleChatDone = false
-
-            var shouldChat = false
-            if (state === "gaming") {
-                // low-freq company while gaming: 5 min cooldown. Gaming keeps
-                // keyboard/mouse active, so idleChatDone never re-arms during
-                // the game; the cooldown alone controls the frequency.
-                if (!root.lastIdleChatAt || Date.now() - root.lastIdleChatAt >= 5 * 60 * 1000)
-                    shouldChat = true
-            } else if (!root.idleChatDone && state !== "coding") {
-                var idleMs = nowIdleMs
-                var h = new Date().getHours()
-                var lateNight = (h >= 23 || h < 5)
-                var threshold = lateNight ? 4 * 60 * 1000 : 8 * 60 * 1000
-                if (idleMs >= threshold || idleMs >= 30 * 60 * 1000)
-                    shouldChat = true
-            }
-            if (shouldChat) {
-                root.idleChatDone = true
-                root.lastIdleChatAt = Date.now()
+            if (!root.nextProactiveAt) root.scheduleNextProactive()
+            // coding / busy foreground -> never interrupt (schedule holds)
+            if (aiService.userActivityState() === "coding") return
+            if (Date.now() >= root.nextProactiveAt) {
+                root.scheduleNextProactive()
                 // feed the AI the last 3 chat messages so it can start a
                 // topic based on what was actually being discussed
                 var recent = chatPage.recentMessages(3)
