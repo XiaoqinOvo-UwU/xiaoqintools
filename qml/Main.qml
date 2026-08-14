@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.19"
+                        text: "小钦的工具 v3.5.20"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -1379,7 +1379,10 @@ ApplicationWindow {
     // base with jitter, so it never feels like clockwork).
     // Coding/busy foreground never interrupted; the next attempt is scheduled
     // from the moment a message was actually sent (no spam on game sessions).
-    property int nextProactiveAt: 0
+    // NOTE: must be `var` (not `int`) — Date.now() is a 13-digit ms timestamp
+    // that overflows QML's 32-bit int and becomes negative, which would make
+    // `Date.now() >= nextProactiveAt` always true and spam proactive chats.
+    property var nextProactiveAt: 0
 
     function scheduleNextProactive() {
         var mins = 25 + Math.floor(Math.random() * 11) // 25..35 min
@@ -1416,7 +1419,7 @@ ApplicationWindow {
     }
 
     // ================= long-session reminder: nudge to rest after long continuous use =================
-    property int appStartTime: Date.now()
+    property var appStartTime: Date.now()
     property bool restReminded: false
     Timer {
         id: restTimer
