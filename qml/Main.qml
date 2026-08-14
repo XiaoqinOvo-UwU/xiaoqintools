@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.17"
+                        text: "小钦的工具 v3.5.18"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -1399,42 +1399,44 @@ ApplicationWindow {
             // Smart companion triggers (consider busy state, software, time,
             // recent chat, unfinished topics):
             //  - coding / busy foreground -> never interrupt
-            //  - Minecraft foreground -> low-freq company (~1 min)
+            //  - Minecraft foreground -> low-freq company (5 min cooldown)
             //  - late night -> gentle company (4 min idle)
             //  - otherwise -> 8 min real idle
             //  - long away (>30 min) -> wait and greet on return
             var state = aiService.userActivityState()
             var nowIdleMs = aiService.lastInputMs()
             if (nowIdleMs < 0) nowIdleMs = Date.now() - root.lastInteraction
-            // once the user is active again (idle < 2 min), allow a future idle chat
-            if (nowIdleMs < 2 * 60 * 1000)
+            // once the user is active again (idle < 2 min), allow a future idle
+            // chat. While gaming, keyboard/mouse stays active so input-based
+            // reset would re-arm every tick — the gaming cooldown handles that.
+            if (nowIdleMs < 2 * 60 * 1000 && state !== "gaming")
                 root.idleChatDone = false
 
-            if (!root.idleChatDone && state !== "coding") {
-                var shouldChat = false
-                if (state === "gaming") {
-                    // low-freq company while gaming; still respect a cool-down
-                    if (!root.lastIdleChatAt || Date.now() - root.lastIdleChatAt >= 60 * 1000)
-                        shouldChat = true
-                } else {
-                    var idleMs = nowIdleMs
-                    var h = new Date().getHours()
-                    var lateNight = (h >= 23 || h < 5)
-                    var threshold = lateNight ? 4 * 60 * 1000 : 8 * 60 * 1000
-                    if (idleMs >= threshold || idleMs >= 30 * 60 * 1000)
-                        shouldChat = true
-                }
-                if (shouldChat) {
-                    root.idleChatDone = true
-                    root.lastIdleChatAt = Date.now()
-                    // feed the AI the last 3 chat messages so it can start a
-                    // topic based on what was actually being discussed
-                    var recent = chatPage.recentMessages(3)
-                    if (recent.length > 0)
-                        aiService.setChatHistory(recent.join("\n"))
-                    aiService.idleChat()
-                    islandToast.show(aiService.aiName() + "想找你聊聊~", 6000)
-                }
+            var shouldChat = false
+            if (state === "gaming") {
+                // low-freq company while gaming: 5 min cooldown. Gaming keeps
+                // keyboard/mouse active, so idleChatDone never re-arms during
+                // the game; the cooldown alone controls the frequency.
+                if (!root.lastIdleChatAt || Date.now() - root.lastIdleChatAt >= 5 * 60 * 1000)
+                    shouldChat = true
+            } else if (!root.idleChatDone && state !== "coding") {
+                var idleMs = nowIdleMs
+                var h = new Date().getHours()
+                var lateNight = (h >= 23 || h < 5)
+                var threshold = lateNight ? 4 * 60 * 1000 : 8 * 60 * 1000
+                if (idleMs >= threshold || idleMs >= 30 * 60 * 1000)
+                    shouldChat = true
+            }
+            if (shouldChat) {
+                root.idleChatDone = true
+                root.lastIdleChatAt = Date.now()
+                // feed the AI the last 3 chat messages so it can start a
+                // topic based on what was actually being discussed
+                var recent = chatPage.recentMessages(3)
+                if (recent.length > 0)
+                    aiService.setChatHistory(recent.join("\n"))
+                aiService.idleChat()
+                islandToast.show(aiService.aiName() + "想找你聊聊~", 6000)
             }
         }
     }
