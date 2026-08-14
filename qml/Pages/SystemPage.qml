@@ -24,8 +24,13 @@ Page {
         Text {
             text: "系统工具"
             color: "white"
-            font.pixelSize: 20
+            font.pixelSize: Theme.fsPage
             font.bold: true
+        }
+        Text {
+            text: "清理垃圾与内存，保持系统清爽"
+            color: Theme.textDim
+            font.pixelSize: Theme.fsSmall
         }
 
         GridLayout {

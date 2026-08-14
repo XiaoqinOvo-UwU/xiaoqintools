@@ -28,8 +28,13 @@ Page {
             Text {
                 text: "设置"
                 color: "white"
-                font.pixelSize: 20
+                font.pixelSize: Theme.fsPage
                 font.bold: true
+            }
+            Text {
+                text: "梯子路径、AI 配置与更新检查"
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSmall
             }
 
             // ---- glass section card: 梯子路径 ----
@@ -410,7 +415,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小钦的工具 v3.5.20 · 泉此方天下第一"
+                text: "小钦的工具 v3.5.21 · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
             }

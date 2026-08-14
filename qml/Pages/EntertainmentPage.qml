@@ -29,8 +29,13 @@ Page {
         Text {
             text: "娱乐 · UwU"
             color: "white"
-            font.pixelSize: 20
+            font.pixelSize: Theme.fsPage
             font.bold: true
+        }
+        Text {
+            text: "今日运势、抽签和一点小乐趣"
+            color: Theme.textDim
+            font.pixelSize: Theme.fsSmall
         }
 
         GridLayout {

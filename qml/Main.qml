@@ -324,6 +324,26 @@ ApplicationWindow {
                     }
                 }
 
+                // empty state: no AI contacts yet — explain + CTA
+                Column {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.sp6
+                    visible: contactModel.count === 0
+                    spacing: Theme.sp3
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "还没有 AI 联系人"
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fsSmall
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "去「设置 → AI 配置」添加第一个 AI 吧"
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fsCaption
+                    }
+                }
+
                 Rectangle { // separator
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
@@ -354,6 +374,26 @@ ApplicationWindow {
                              : hovered ? Theme.hoverBg
                              : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
+                        focus: true
+                        FocusScope {
+                            anchors.fill: parent
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "transparent"
+                                border.color: Theme.focusRing
+                                border.width: 1
+                                radius: Theme.rMd
+                                visible: parent.activeFocus
+                                opacity: 0.9
+                            }
+                        }
+                        Keys.onReturnPressed: activate()
+                        Keys.onEnterPressed: activate()
+                        Keys.onSpacePressed: activate()
+                        function activate() {
+                            root.currentPage = myIndex
+                            root.chatOpen = false
+                        }
 
                         Rectangle {
                             width: 3; height: active ? 22 : 0
@@ -390,23 +430,38 @@ ApplicationWindow {
                             hoverEnabled: true
                             onEntered: navItem.hovered = true
                             onExited: navItem.hovered = false
-                            onClicked: {
-                                root.currentPage = index
-                                root.chatOpen = false
-                            }                        }
+                            onClicked: navItem.activate()
+                        }
                     }
                 }
 
-                // ---- bottom: about line ----
+                // ---- bottom: status bar (version + connection/last error) ----
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 42
                     color: "transparent"
-                    Text {
-                        anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.20"
-                        color: Theme.textDim
-                        font.pixelSize: 11
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 12
+                        spacing: Theme.sp2
+                        Rectangle {
+                            width: 7; height: 7; radius: 3.5
+                            color: appCore.statusText === "在线" ? Theme.ok : Theme.warn
+                        }
+                        Text {
+                            text: appCore.statusText
+                            color: Theme.textDim
+                            font.pixelSize: Theme.fsCaption
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: "v3.5.21"
+                            color: Theme.textDim
+                            font.pixelSize: Theme.fsCaption
+                            opacity: 0.7
+                        }
                     }
                 }
             }

@@ -62,9 +62,15 @@ Page {
             Text {
                 text: "梯子管理"
                 color: "white"
-                font.pixelSize: 20
+                font.pixelSize: Theme.fsPage
                 font.bold: true
             }
+            Text {
+                text: "导入节点或订阅链接，一键打开梯子"
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSmall
+            }
+
 
             Rectangle {
                 Layout.fillWidth: true

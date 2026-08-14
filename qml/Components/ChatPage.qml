@@ -320,6 +320,26 @@ Rectangle {
                 }
             }
         }
+        // empty chat state: explain + invite to start (never a blank panel)
+        Column {
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignHCenter | Qt.AlignTop
+            Layout.topMargin: 60
+            visible: msgModel.count === 0
+            spacing: Theme.sp2
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "还没有消息"
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSmall
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "在下方输入框说点什么，开始和 " + aiService.aiName() + " 聊天吧"
+                color: Theme.textMuted
+                font.pixelSize: Theme.fsCaption
+            }
+        }
         ListModel { id: msgModel }
 
         // input bar
@@ -360,8 +380,8 @@ Rectangle {
                     }
                 }
                 AppButton {
-                    text: "发送"
-                    implicitWidth: 64
+                    text: replyBusy ? "回复中…" : "发送"
+                    implicitWidth: replyBusy ? 88 : 64
                     implicitHeight: 38
                     onClicked: sendMsg()
                 }
