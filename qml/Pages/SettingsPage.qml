@@ -8,34 +8,33 @@ import "../Components"
 // persona editing and memory viewer (AIRI-inspired).
 Page {
     id: root
+    padding: 0
     background: Rectangle { color: Theme.bg }
 
     property string note: ""
 
-    // scrollable content
-    ScrollView {
-        id: scroll
+    // fixed header + scrollable body — same top slot as other pages
+    ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 20
-        clip: true
-        ScrollBar.vertical.policy: ScrollBar.AsNeeded
-        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        anchors.margins: 24
+        spacing: 16
 
-        ColumnLayout {
-            width: scroll.availableWidth
-            spacing: 14
+        PageHeader {
+            title: "设置"
+            subtitle: "梯子路径、AI 配置与更新检查"
+        }
 
-            Text {
-                text: "设置"
-                color: "white"
-                font.pixelSize: Theme.fsPage
-                font.bold: true
-            }
-            Text {
-                text: "梯子路径、AI 配置与更新检查"
-                color: Theme.textDim
-                font.pixelSize: Theme.fsSmall
-            }
+        ScrollView {
+            id: scroll
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+            ColumnLayout {
+                width: scroll.availableWidth
+                spacing: 14
 
             // ---- glass section card: 梯子路径 ----
             Rectangle {
@@ -415,9 +414,10 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小钦的工具 v3.5.21 · 泉此方天下第一"
+                text: "小钦的工具 v3.5.22 · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
+            }
             }
         }
     }

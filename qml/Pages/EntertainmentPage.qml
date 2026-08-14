@@ -5,6 +5,7 @@ import "../Components"
 
 Page {
     id: root
+    padding: 0
     background: Rectangle { color: Theme.bg }
 
     property string result: ""
@@ -24,25 +25,19 @@ Page {
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
-        spacing: 20
+        spacing: 16
 
-        Text {
-            text: "娱乐 · UwU"
-            color: "white"
-            font.pixelSize: Theme.fsPage
-            font.bold: true
+        PageHeader {
+            title: "娱乐 · UwU"
+            subtitle: "今日运势、抽签和一点小乐趣"
         }
-        Text {
-            text: "今日运势、抽签和一点小乐趣"
-            color: Theme.textDim
-            font.pixelSize: Theme.fsSmall
-        }
-
         GridLayout {
             columns: 3
             columnSpacing: 14
             rowSpacing: 14
             Layout.fillWidth: true
+            Layout.alignment: Qt.AlignLeft | Qt.AlignTop
+            Layout.fillHeight: false
 
             ActionCard {
                 Layout.fillWidth: true

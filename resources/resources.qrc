@@ -8,6 +8,7 @@
         <file>../qml/Components/ChatPage.qml</file>
         <file>../qml/Components/ReportDialog.qml</file>
         <file>../qml/Components/Theme.qml</file>
+        <file>../qml/Components/PageHeader.qml</file>
         <file>../qml/Components/qmldir</file>
         <file>../qml/Pages/NetworkPage.qml</file>
         <file>../qml/Pages/SystemPage.qml</file>

@@ -435,33 +435,16 @@ ApplicationWindow {
                     }
                 }
 
-                // ---- bottom: status bar (version + connection/last error) ----
+                // ---- bottom: version line ----
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 42
                     color: "transparent"
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 12
-                        spacing: Theme.sp2
-                        Rectangle {
-                            width: 7; height: 7; radius: 3.5
-                            color: appCore.statusText === "在线" ? Theme.ok : Theme.warn
-                        }
-                        Text {
-                            text: appCore.statusText
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fsCaption
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            text: "v3.5.21"
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fsCaption
-                            opacity: 0.7
-                        }
+                    Text {
+                        anchors.centerIn: parent
+                        text: "小钦的工具 v3.5.22"
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fsCaption
                     }
                 }
             }

@@ -5,6 +5,7 @@ import "../Components"
 
 Page {
     id: page
+    padding: 0
     background: Rectangle { color: Theme.bg }
 
     property string proxyStatus: "检测中..."
@@ -46,49 +47,48 @@ Page {
         onTriggered: page.refreshStatus()
     }
 
-    // two fixed columns for perfect alignment
-    RowLayout {
+    // fixed header + two-column body — same top slot as Entertainment/Settings
+    ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
-        spacing: 28
+        spacing: 16
 
-        // ---------- LEFT: 梯子管理 ----------
-        ColumnLayout {
-            Layout.preferredWidth: 420
-            Layout.fillHeight: false
+        PageHeader {
+            title: "网络工具"
+            subtitle: "梯子管理、测速与故障自检"
+        }
+
+        // two fixed columns for perfect alignment
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             Layout.alignment: Qt.AlignTop
-            spacing: 14
+            spacing: 28
 
-            Text {
-                text: "梯子管理"
-                color: "white"
-                font.pixelSize: Theme.fsPage
-                font.bold: true
-            }
-            Text {
-                text: "导入节点或订阅链接，一键打开梯子"
-                color: Theme.textDim
-                font.pixelSize: Theme.fsSmall
-            }
+            // ---------- LEFT: 梯子管理 ----------
+            ColumnLayout {
+                Layout.preferredWidth: 420
+                Layout.fillHeight: false
+                Layout.alignment: Qt.AlignTop
+                spacing: 14
 
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 96
-                color: Theme.surface
-                radius: 10
-                TextArea {
-                    id: input
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    color: "white"
-                    placeholderText: "粘贴 vmess/vless/trojan/ss 链接 或 订阅地址"
-                    placeholderTextColor: Theme.textDim
-                    background: null
-                    font.pixelSize: 13
-                    wrapMode: TextEdit.Wrap
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 96
+                    color: Theme.surface
+                    radius: 10
+                    TextArea {
+                        id: input
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        color: "white"
+                        placeholderText: "粘贴 vmess/vless/trojan/ss 链接 或 订阅地址"
+                        placeholderTextColor: Theme.textDim
+                        background: null
+                        font.pixelSize: 13
+                        wrapMode: TextEdit.Wrap
+                    }
                 }
-            }
 
             RowLayout {
                 Layout.fillWidth: true
@@ -197,12 +197,6 @@ Page {
             Layout.alignment: Qt.AlignTop
             spacing: 14
 
-            Text {
-                text: "网络工具"
-                color: "white"
-                font.pixelSize: 20
-                font.bold: true
-            }
             GridLayout {
                 columns: 2
                 columnSpacing: 14
@@ -288,6 +282,7 @@ Page {
                 }
             }
         }
+    }
     }
 
     // async results from NetworkService -> update UI without blocking

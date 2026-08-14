@@ -30,6 +30,33 @@ static QString unfinishedPath();
 static QString interestPath();
 static QJsonObject readRelationship();
 
+// strip stage directions from AI output so the chat reads like real dialog:
+// removes （动作）、(动作)、*动作* and standalone "旁白。" lines, then trims.
+static QString stripStageDirections(const QString &raw)
+{
+    QString s = raw;
+    static const QRegularExpression parenRe("[（(][^（()]*[)）]");
+    static const QRegularExpression starRe("\\*[^*\\n]*\\*");
+    s.remove(parenRe);
+    s.remove(starRe);
+    // remove leftover lines that are pure narration (no dialog content):
+    // a line ending in 。/！/？ that contains no quotes is likely narration
+    QStringList kept;
+    for (const QString &line : s.split('\n')) {
+        QString l = line.trimmed();
+        if (l.isEmpty()) continue;
+        bool hasQuote = l.contains(QString("\"")) || l.contains(QString("“")) || l.contains(QString("”"));
+        bool hasQuestion = l.contains(QString("？")) || l.contains('?');
+        // keep if it has quotes, or is a question, or is short enough to be dialog
+        if (hasQuote || hasQuestion || l.length() <= 20)
+            kept << l;
+        // otherwise drop the line (narration)
+    }
+    s = kept.join('\n');
+    s = s.trimmed();
+    return s;
+}
+
 AiService::AiService(QObject *parent)
     : QObject(parent)
 {
@@ -567,6 +594,8 @@ void AiService::idleChat()
         out.remove(actRe);
         out.remove(delayRe);
         QString text = out.trimmed();
+        // strip stage directions so proactive messages read like real dialog
+        text = stripStageDirections(text);
         // AI may decide to stay quiet (e.g. user is coding) -> skip
         if (text.isEmpty()) {
             watcher->deleteLater();
@@ -621,6 +650,8 @@ void AiService::idleChat()
             + "\n请结合上面信息主动找个话题和ta聊一句：优先延续未完成的话题，其次是共同经历和兴趣。"
               "只有[真实读取]显示用户在做正事（写代码等），这次才安静别打扰，输出空字符串。"
               "像朋友一样，25字以内简短一句，不要生硬，不要罗列数据，不要把猜测当事实。\n"
+              "【回复格式】只输出对话内容本身。禁止括号动作（如（温柔地看着你））、星号动作（如*轻轻抱住你*）、"
+              "旁白或任何角色状态描写，把情绪自然融入话里。\n"
               "你的当前状态：" + aiState + "\n你可以参考记忆：\n" + mem + "\n只输出这句话本身，若决定不打扰则输出空。";
         return callDeepSeekStatic("你是温柔可爱的AI陪伴者。", prompt);
     });
@@ -1002,6 +1033,15 @@ void AiService::sendMessage(const QString &text)
           "普通聊天：不超过25字，简短自然。若想说的内容超过25字，就拆成多条短句逐条发送，每条都不超过25字，多条之间用换行符分隔，像人聊天一样一条一条发。\n"
           "深入话题或用户求助：不超过80字。\n"
           "禁止长篇大论。允许轻微玩笑、撒娇、小情绪，不要每句话都安慰。\n"
+          "【回复格式——极其重要】\n"
+          "禁止输出舞台动作、角色状态、旁白等非对话内容：\n"
+          "禁止括号动作：如（温柔地看着你）（语气变轻了些）（沉默了一会）（停顿）\n"
+          "禁止星号动作：如*轻轻抱住你*\n"
+          "禁止独立旁白行：如（低头）（露出微笑）或单独成句的'我轻轻笑了。'\n"
+          "把情绪和动作融入对话本身，像真人发消息一样：\n"
+          "错误：（语气变轻了些）'没关系。'\n"
+          "正确：'没关系啦。' 或 '没事的，我在呢。'\n"
+          "只输出对话内容本身，不输出任何角色说明、动作脚本或旁白。\n"
           "【减少固定模板】禁止频繁重复'喝水/休息/吃饭/打游戏'这类查岗式关心。"
           "多聊当前话题、共同经历、兴趣、未完成的话题，像认识的人那样自然延续，别每天重复同样的固定话术。\n"
         + "当前策略：" + strategy + "\n"
@@ -1116,6 +1156,9 @@ void AiService::sendMessage(const QString &text)
         speech.remove(actRe);
         speech.remove(delayRe);
         speech = speech.trimmed();
+        // strip stage directions （动作）/*动作*/ and narration lines so the
+        // chat window shows natural dialog, not a script
+        speech = stripStageDirections(speech);
 
         // replay emotion tokens with small delays so the UI shows emotion changes (no threads, timer-based)
         int running = 0;

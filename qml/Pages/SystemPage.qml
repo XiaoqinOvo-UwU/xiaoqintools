@@ -4,13 +4,13 @@ import QtQuick.Layouts
 import "../Components"
 
 Page {
+    padding: 0
     background: Rectangle { color: Theme.bg }
 
     Connections {
         target: sysService
         function onCleanupDone(message) {
             appCore.showToast(message)
-            // record freed MB into stats (parse "释放 N MB")
             var m = message.match(/释放\s*(\d+)\s*MB/)
             if (m) statsService.record("clean", m[1])
         }
@@ -19,18 +19,11 @@ Page {
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
-        spacing: 20
+        spacing: 16
 
-        Text {
-            text: "系统工具"
-            color: "white"
-            font.pixelSize: Theme.fsPage
-            font.bold: true
-        }
-        Text {
-            text: "清理垃圾与内存，保持系统清爽"
-            color: Theme.textDim
-            font.pixelSize: Theme.fsSmall
+        PageHeader {
+            title: "系统工具"
+            subtitle: "清理垃圾与内存，保持系统清爽"
         }
 
         GridLayout {
@@ -49,7 +42,8 @@ Page {
                     appCore.showToast("泉此方开始扫垃圾了...")
                     sysService.cleanJunkAsync()
                 }
-            }            ActionCard {
+            }
+            ActionCard {
                 title: "清理内存"
                 desc: "释放进程内存"
                 Layout.fillWidth: true
@@ -95,9 +89,9 @@ Page {
                 }
             }
         }
+        Item { Layout.fillHeight: true }
     }
 
-    // startup items dialog (manageable: view + disable/enable)
     Dialog {
         id: startupDialog
         width: 560
@@ -181,7 +175,6 @@ Page {
         }
     }
 
-    // generic tool result dialog (usage report / file scan / clipboard)
     Dialog {
         id: toolDialog
         width: 520
@@ -220,7 +213,6 @@ Page {
         }
     }
 
-    // usage report dialog with bar charts
     ReportDialog {
         id: reportDialog
     }
