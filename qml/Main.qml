@@ -404,7 +404,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.5.16"
+                        text: "小钦的工具 v3.5.17"
                         color: Theme.textDim
                         font.pixelSize: 11
                     }
@@ -768,13 +768,6 @@ ApplicationWindow {
                     text: "📌 共同经历（事件记忆）"
                     onClicked: { memoryCat.openCat("共同经历", aiService.eventMemoryText(50), false) }
                 }
-                // 人格
-                AppButton {
-                    Layout.fillWidth: true
-                    implicitHeight: 40
-                    text: "🎭 人格（性格特质与风格，可调整）"
-                    onClicked: { personaDialog.open() }
-                }
                 // 关系
                 AppButton {
                     Layout.fillWidth: true
@@ -884,8 +877,7 @@ ApplicationWindow {
                 visible: false
                 onClicked: {
                     var t = catEditText.text.trim()
-                    if (memoryCat.catTitle === "人格") aiService.setPersonalityRaw(t)
-                    else if (memoryCat.catTitle === "兴趣") aiService.setInterestsRaw(t)
+                    if (memoryCat.catTitle === "兴趣") aiService.setInterestsRaw(t)
                     else if (memoryCat.catTitle === "未完成话题") aiService.setUnfinishedRaw(t)
                     else if (memoryCat.catTitle === "关系") {
                         try {
@@ -976,99 +968,6 @@ ApplicationWindow {
         }
     }
 
-    // 人格：特质滑条 + 风格下拉
-    Dialog {
-        id: personaDialog
-        width: 440
-        height: 500
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
-        header: Item {
-            height: 40
-            Text { anchors.centerIn: parent; text: "人格"; color: Theme.text; font.pixelSize: 16; font.bold: true }
-            AppButton {
-                anchors.right: parent.right; anchors.rightMargin: 6
-                anchors.verticalCenter: parent.verticalCenter
-                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
-                onClicked: personaDialog.close()
-            }
-        }
-        contentItem: ColumnLayout {
-            spacing: 10
-
-            Text { text: "温柔"; color: Theme.textDim; font.pixelSize: 12 }
-            RowLayout {
-                Layout.fillWidth: true
-                DarkSlider {
-                    id: traitGentle
-                    Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.personaTrait("温柔")
-                    onValueChanged: aiService.setPersonaTrait("温柔", value)
-                }
-                Text { text: traitGentle.value; color: Theme.textDim; font.pixelSize: 11 }
-            }
-            Text { text: "傲娇"; color: Theme.textDim; font.pixelSize: 12 }
-            RowLayout {
-                Layout.fillWidth: true
-                DarkSlider {
-                    id: traitTsun
-                    Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.personaTrait("傲娇")
-                    onValueChanged: aiService.setPersonaTrait("傲娇", value)
-                }
-                Text { text: traitTsun.value; color: Theme.textDim; font.pixelSize: 11 }
-            }
-            Text { text: "幽默"; color: Theme.textDim; font.pixelSize: 12 }
-            RowLayout {
-                Layout.fillWidth: true
-                DarkSlider {
-                    id: traitHumor
-                    Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.personaTrait("幽默")
-                    onValueChanged: aiService.setPersonaTrait("幽默", value)
-                }
-                Text { text: traitHumor.value; color: Theme.textDim; font.pixelSize: 11 }
-            }
-            Text { text: "依赖"; color: Theme.textDim; font.pixelSize: 12 }
-            RowLayout {
-                Layout.fillWidth: true
-                DarkSlider {
-                    id: traitCling
-                    Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.personaTrait("依赖")
-                    onValueChanged: aiService.setPersonaTrait("依赖", value)
-                }
-                Text { text: traitCling.value; color: Theme.textDim; font.pixelSize: 11 }
-            }
-            Text { text: "成熟"; color: Theme.textDim; font.pixelSize: 12 }
-            RowLayout {
-                Layout.fillWidth: true
-                DarkSlider {
-                    id: traitMature
-                    Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.personaTrait("成熟")
-                    onValueChanged: aiService.setPersonaTrait("成熟", value)
-                }
-                Text { text: traitMature.value; color: Theme.textDim; font.pixelSize: 11 }
-            }
-            Text {
-                Layout.fillWidth: true
-                text: "拖动滑块调整性格特质，改动实时生效"
-                color: Theme.textDim
-                font.pixelSize: 11
-                horizontalAlignment: Text.AlignHCenter
-            }
-        }
-    }
-
-    // 关系：两个滑条
     Dialog {
         id: relationshipDialog
         width: 440

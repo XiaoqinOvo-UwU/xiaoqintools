@@ -40,14 +40,7 @@ public:
     Q_INVOKABLE void setAiMood(const QString &mood); // update AI mood (continuity)
     Q_INVOKABLE void adjustAiEnergy(int delta);      // energy after interactions
 
-    // ---- batch B: personality + relationship ----
-    Q_INVOKABLE QString personalityText();   // structured traits/style from personality.json
-    Q_INVOKABLE QString personalityRaw();    // full personality.json as text (for editing)
-    Q_INVOKABLE void setPersonalityRaw(const QString &json); // replace personality.json
-    Q_INVOKABLE int personaTrait(const QString &key);      // trait value 0-100
-    Q_INVOKABLE void setPersonaTrait(const QString &key, int v);
-    Q_INVOKABLE QString personaStyle(const QString &key);  // style field
-    Q_INVOKABLE void setPersonaStyle(const QString &key, const QString &v);
+    // ---- batch B: relationship ----
     Q_INVOKABLE QString relationshipText();  // relationship continuity for prompt
     Q_INVOKABLE void bumpRelationship(int intimacyDelta, int trustDelta);
     Q_INVOKABLE void setRelationship(int intimacy, int trust); // manual override

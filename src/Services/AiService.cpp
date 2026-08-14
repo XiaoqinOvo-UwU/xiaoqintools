@@ -28,7 +28,6 @@
 static QJsonObject readAiState();
 static QString unfinishedPath();
 static QString interestPath();
-static QString personalityPath();
 static QJsonObject readRelationship();
 
 AiService::AiService(QObject *parent)
@@ -603,20 +602,25 @@ void AiService::idleChat()
         QString eventsBlock;
         if (!events.isEmpty())
             eventsBlock = "\n你们一起经历过的：\n" + events + "\n";
-        QString prompt = "你是" + ai + "，人格：" + personalityText() + "。用户" + user + "已经有一会儿没操作电脑了。\n"
+        QString prompt = "你是" + ai + "，人设：" + aiPersonality() + "。用户" + user + "已经有一会儿没操作电脑了。\n"
             + "【我们的关系】" + relationshipText() + "\n"
             + ctx.join("\n")
             + recentBlock + topicsBlock + interestBlock + eventsBlock
-            + "\n【事实来源分级】你唯一能确定的用户信息来自：①用户说过的话；②上面标[真实读取]的数据。"
-              "没有来源的用户行为描述一律禁止，绝不能说'我看到你''你玩了X小时'，除非上面明确给出。"
-              "不确定就用'感觉''是不是''我猜'，或干脆不提。宁可少说，不可编造。\n"
+            + "\n【信息可信度分级——必须严格遵守】\n"
+              "Level 1（真实数据，可说具体）：只有两类来源——①用户明确说过的；②上面标[真实读取]的数据。\n"
+              "  可说：'你刚才说在玩游戏''检测到Minecraft在运行''你当前前台是浏览器'。\n"
+              "Level 2（推测，必须加'是不是/感觉/我猜'）：当你有部分依据但不确定。\n"
+              "  可说：'感觉你晚上可能又在电脑前忙？'；绝不能说'又在打游戏呀''点外卖呀'这种把猜测当事实的话。\n"
+              "Level 3（未知，禁止具体行为）：没有任何来源时，禁止生成任何用户行为描述。\n"
+              "  禁止说：'我看到你……''你刚刚……''又在……''你是不是去……'，除非上面有数据支持。\n"
+              "核心：宁可少说，绝不编造。没有数据就说没有数据的自然话（'忙吗''想聊点啥'），或者基于记忆聊一个共同话题。\n"
+            + "【减少固定模板】禁止频繁重复'喝水/休息/吃饭/打游戏'这类查岗式关心。"
+              "优先聊：未结束的话题、共同经历、兴趣方向、最近聊过的内容——像认识的人那样自然延续，别说'根据记忆''我记得你'。\n"
             + "【角色边界】你是现实陪伴型AI，禁止描述自己做不到的动作（如'我去调整''我帮你改了'），"
               "禁止虚构共同经历。陪伴说'我陪着你'，不说'我知道你发生了什么'。\n"
-            + "\n请结合上面信息主动找个话题和ta聊一句：优先延续未完成的话题，其次是共同经历和兴趣，"
-              "自然得像老朋友提起，不要说'根据记忆'。"
-              "如果用户深夜还没睡，语气更温柔；如果用户在打游戏，轻松提一句别啰嗦；"
-              "如果用户刚离开回来，用'回来啦'打招呼；如果用户在做正事（写代码等），这次就安静别打扰，输出空字符串。"
-              "像朋友一样，25字以内简短一句，不要生硬，不要罗列数据。\n"
+            + "\n请结合上面信息主动找个话题和ta聊一句：优先延续未完成的话题，其次是共同经历和兴趣。"
+              "只有[真实读取]显示用户在做正事（写代码等），这次才安静别打扰，输出空字符串。"
+              "像朋友一样，25字以内简短一句，不要生硬，不要罗列数据，不要把猜测当事实。\n"
               "你的当前状态：" + aiState + "\n你可以参考记忆：\n" + mem + "\n只输出这句话本身，若决定不打扰则输出空。";
         return callDeepSeekStatic("你是温柔可爱的AI陪伴者。", prompt);
     });
@@ -786,14 +790,6 @@ QString AiService::memoryDetail()
         lines << "";
         lines << "【共同经历（事件记忆）】";
         lines << "  " + events.replace('\n', "\n  ");
-    }
-
-    // ---- personality ----
-    QString pers = personalityText();
-    if (!pers.isEmpty()) {
-        lines << "";
-        lines << "【人格】";
-        lines << "  " + pers.replace('\n', "\n  ");
     }
 
     // ---- relationship ----
@@ -985,7 +981,7 @@ void AiService::sendMessage(const QString &text)
         strategy = "正常聊天，自然延续。";
 
     QString system = "你是" + ai + "，用户叫" + user + "。\n"
-        + "【人格】\n" + personalityText() + "\n"
+        + "【人设】" + aiPersonality() + "\n"
         + "【我们的关系】" + relationshipText() + "\n"
         + "规则：像真人聊天，不要客服语气，不频繁提醒自己是AI，根据用户情绪回应。\n"
         + "重要：不要机械复述或回显用户的原话，不要反复引用同一句话。"
@@ -1006,6 +1002,8 @@ void AiService::sendMessage(const QString &text)
           "普通聊天：不超过25字，简短自然。若想说的内容超过25字，就拆成多条短句逐条发送，每条都不超过25字，多条之间用换行符分隔，像人聊天一样一条一条发。\n"
           "深入话题或用户求助：不超过80字。\n"
           "禁止长篇大论。允许轻微玩笑、撒娇、小情绪，不要每句话都安慰。\n"
+          "【减少固定模板】禁止频繁重复'喝水/休息/吃饭/打游戏'这类查岗式关心。"
+          "多聊当前话题、共同经历、兴趣、未完成的话题，像认识的人那样自然延续，别每天重复同样的固定话术。\n"
         + "当前策略：" + strategy + "\n"
         + "情绪表达：回复开头用一个情绪令牌表示你此刻的情绪，例如 <|ACT {\"emotion\":\"happy\"}|>；"
           "若中途情绪变化，在变化处再插一个令牌；需要停顿节奏时可插入 <|DELAY 1|>（数字为秒）。"
@@ -1497,79 +1495,6 @@ void AiService::adjustAiEnergy(int delta)
     writeAiState(o);
 }
 
-// ---- persona trait/style accessors (friendly UI) ----
-int AiService::personaTrait(const QString &key)
-{
-    QFile f(personalityPath());
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
-        f.close();
-        if (d.isObject()) {
-            QJsonObject traits = d.object().value("traits").toObject();
-            if (traits.contains(key)) return traits.value(key).toInt();
-        }
-    }
-    // defaults
-    if (key == "温柔") return 90;
-    if (key == "傲娇") return 60;
-    if (key == "幽默") return 50;
-    if (key == "依赖") return 70;
-    if (key == "成熟") return 85;
-    return 50;
-}
-
-void AiService::setPersonaTrait(const QString &key, int v)
-{
-    QJsonObject o;
-    QFile rf(personalityPath());
-    if (rf.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QJsonDocument d = QJsonDocument::fromJson(rf.readAll());
-        if (d.isObject()) o = d.object();
-        rf.close();
-    }
-    QJsonObject traits = o.value("traits").toObject();
-    traits.insert(key, qBound(0, v, 100));
-    o.insert("traits", traits);
-    QFile f(personalityPath());
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        f.write(QJsonDocument(o).toJson());
-        f.close();
-    }
-}
-
-QString AiService::personaStyle(const QString &key)
-{
-    QFile f(personalityPath());
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
-        f.close();
-        if (d.isObject()) {
-            QJsonObject style = d.object().value("style").toObject();
-            if (style.contains(key)) return style.value(key).toString();
-        }
-    }
-    return QString();
-}
-
-void AiService::setPersonaStyle(const QString &key, const QString &v)
-{
-    QJsonObject o;
-    QFile rf(personalityPath());
-    if (rf.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QJsonDocument d = QJsonDocument::fromJson(rf.readAll());
-        if (d.isObject()) o = d.object();
-        rf.close();
-    }
-    QJsonObject style = o.value("style").toObject();
-    style.insert(key, v);
-    o.insert("style", style);
-    QFile f(personalityPath());
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        f.write(QJsonDocument(o).toJson());
-        f.close();
-    }
-}
-
 int AiService::relationshipIntimacy()
 {
     QJsonObject o = readRelationship();
@@ -1821,44 +1746,7 @@ QString AiService::userActivityState()
     return "idle";
 }
 
-// ================= Batch B: personality + relationship =================
-
-static QString personalityPath()
-{
-    return ConfigService::instance().configDir() + "/personality.json";
-}
-
-// structured personality: traits + style. Falls back to the contact persona text.
-QString AiService::personalityText()
-{
-    QFile f(personalityPath());
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QJsonDocument d = QJsonDocument::fromJson(f.readAll());
-        f.close();
-        if (d.isObject()) {
-            QJsonObject o = d.object();
-            QJsonObject traits = o.value("traits").toObject();
-            QJsonObject style = o.value("style").toObject();
-            QStringList lines;
-            if (!traits.isEmpty()) {
-                QStringList tl;
-                for (auto it = traits.constBegin(); it != traits.constEnd(); ++it)
-                    tl << it.key() + ":" + QString::number(it.value().toInt());
-                lines << "性格特质：" + tl.join("，");
-            }
-            if (!style.isEmpty()) {
-                QStringList sl;
-                for (auto it = style.constBegin(); it != style.constEnd(); ++it)
-                    sl << it.key() + "：" + it.value().toString();
-                lines << "说话风格：" + sl.join("，");
-            }
-            if (!lines.isEmpty())
-                return lines.join("\n");
-        }
-    }
-    // fallback to the simple persona text the user already set
-    return ContactService::instance().currentPersonality();
-}
+// ================= Batch B: relationship =================
 
 // relationship continuity (relationship.json next to memory)
 static QString relationshipPathB()
@@ -1924,27 +1812,6 @@ void AiService::bumpRelationship(int intimacyDelta, int trustDelta)
 }
 
 // ================= Batch: editable categories for the memory UI =================
-
-QString AiService::personalityRaw()
-{
-    QFile f(personalityPath());
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return "{}";
-    QString s = QString::fromUtf8(f.readAll());
-    f.close();
-    return s;
-}
-
-void AiService::setPersonalityRaw(const QString &json)
-{
-    QJsonParseError pe;
-    QJsonDocument d = QJsonDocument::fromJson(json.toUtf8(), &pe);
-    if (pe.error != QJsonParseError::NoError || !d.isObject()) return; // keep old on invalid
-    QFile f(personalityPath());
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        f.write(d.toJson());
-        f.close();
-    }
-}
 
 void AiService::setRelationship(int intimacy, int trust)
 {
