@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QJsonArray>
 class QTimer;
+class ContextManager;
 
 // AI companion card: chat with DeepSeek + long-term memory.
 // Memory: JSON file storing session times, novel-edit counts, sleep habits.
@@ -124,6 +125,13 @@ public:
     Q_INVOKABLE void stopActivityMonitor();
     Q_INVOKABLE QString activitySummary();     // "今天大部分时间在用什么" (from short-term memory)
 
+    // ---- companion context management (facts / corrections) ----
+    Q_INVOKABLE void notifyUserCorrection();   // UI hint: last AI claim was wrong (debug)
+    Q_INVOKABLE int  correctionCount();        // how many corrections this session
+
+    // ---- proactive topic ranking (for tests / future UI) ----
+    Q_INVOKABLE QStringList rankedTopics(int max); // top N proactive topics by score
+
 signals:
     void chatReply(QString text);
     void idleReply(QString text);            // AI initiated a chat on its own (proactive)
@@ -155,4 +163,8 @@ private:
     void flushActivityToMemory();     // write the accumulated usage into memory
     QHash<QString, int> m_appMinutes; // app title -> minutes (today)
     QTimer *m_monitorTimer = nullptr;
+
+    // companion context: short-term fact cache + correction ledger
+    ContextManager *m_ctx = nullptr;
+    QString m_lastAiReply;            // last AI reply (for correction detection)
 };

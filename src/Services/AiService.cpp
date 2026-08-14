@@ -1,6 +1,9 @@
 #include "AiService.h"
 #include "ConfigService.h"
 #include "ContactService.h"
+#include "ContextManager.h"
+#include "FactFilter.h"
+#include "ResponseValidator.h"
 
 #include <QDir>
 #include <QFile>
@@ -30,35 +33,9 @@ static QString unfinishedPath();
 static QString interestPath();
 static QJsonObject readRelationship();
 
-// strip stage directions from AI output so the chat reads like real dialog:
-// removes （动作）、(动作)、*动作* and standalone "旁白。" lines, then trims.
-static QString stripStageDirections(const QString &raw)
-{
-    QString s = raw;
-    static const QRegularExpression parenRe("[（(][^（()]*[)）]");
-    static const QRegularExpression starRe("\\*[^*\\n]*\\*");
-    s.remove(parenRe);
-    s.remove(starRe);
-    // remove leftover lines that are pure narration (no dialog content):
-    // a line ending in 。/！/？ that contains no quotes is likely narration
-    QStringList kept;
-    for (const QString &line : s.split('\n')) {
-        QString l = line.trimmed();
-        if (l.isEmpty()) continue;
-        bool hasQuote = l.contains(QString("\"")) || l.contains(QString("“")) || l.contains(QString("”"));
-        bool hasQuestion = l.contains(QString("？")) || l.contains('?');
-        // keep if it has quotes, or is a question, or is short enough to be dialog
-        if (hasQuote || hasQuestion || l.length() <= 20)
-            kept << l;
-        // otherwise drop the line (narration)
-    }
-    s = kept.join('\n');
-    s = s.trimmed();
-    return s;
-}
-
 AiService::AiService(QObject *parent)
     : QObject(parent)
+    , m_ctx(new ContextManager)
 {
     ensureMemory();
 }
@@ -540,67 +517,60 @@ qint64 AiService::lastInputMs()
 #endif
 }
 
-// ---- light-weight process snapshot (only for idle chat, runs in background) ----
-static QString processSnapshot()
-{
-#ifdef Q_OS_WIN
-    QProcess p;
-    p.start("tasklist", QStringList() << "/FO" << "CSV" << "/NH");
-    if (!p.waitForFinished(3000)) return QString();
-    QString out = QString::fromLocal8Bit(p.readAllStandardOutput());
-    QStringList names;
-    // parse "name.exe","pid",... lines, dedupe, cap at 30
-    for (const QString &line : out.split('\n')) {
-        int q1 = line.indexOf('"');
-        int q2 = line.indexOf('"', q1 + 1);
-        if (q1 < 0 || q2 < 0) continue;
-        QString name = line.mid(q1 + 1, q2 - q1 - 1).toLower();
-        if (name.isEmpty()) continue;
-        if (!names.contains(name)) names.append(name);
-        if (names.size() >= 30) break;
-    }
-    return names.join(", ");
-#else
-    return QString();
-#endif
-}
-
-// ---- idle chat: AI proactively starts a topic ----
+// ---- idle chat: AI proactively starts a topic (topic-scored) ----
 void AiService::idleChat()
 {
     QString mem = readMemory();
     QString user = ConfigService::instance().userName();
     QString ai = ContactService::instance().currentName();
-    QString activity = activitySummary(); // already cheap (in-memory/JSON)
     QString fg = foregroundApp();         // cheap win32 call
     QString recent = m_chatBuffer.join("\n"); // last few messages if any
 
     // proactive engine inputs: state, unfinished topics, interests, events
     QString state = userActivityState();
     QString aiState = aiStateJson();
-    QString unfinished = unfinishedTopicsText(5);
-    QString interests = interestsText(5);
-    QString events = eventMemoryText(4);
+    QStringList unfinished = unfinishedTopicsText(5).split('\n', Qt::SkipEmptyParts);
+    QStringList interests = interestsText(5).split('\n', Qt::SkipEmptyParts);
+    QStringList events = eventMemoryText(4).split('\n', Qt::SkipEmptyParts);
+    QStringList recentLines = recent.split('\n', Qt::SkipEmptyParts);
+    QStringList userFacts;
+    {
+        // user's own recent stated facts (verified)
+        QList<Fact> uf = m_ctx->factsBySource(FactSource::UserMessage);
+        int n = qMin(uf.size(), 5);
+        for (int i = 0; i < n; ++i)
+            userFacts << uf.at(uf.size() - 1 - i).content;
+    }
+
+    // ---- Topic scorer: ranked candidates instead of a flat prompt ----
+    QList<ContextManager::TopicScore> topics = m_ctx->rankTopics(
+        unfinished, interests, recentLines, events, userFacts);
+    QStringList topTopics;
+    int nt = qMin(topics.size(), 3);
+    for (int i = 0; i < nt; ++i)
+        topTopics << QString("- %1（%2）").arg(topics.at(i).topic, topics.at(i).source);
+
+    // system data facts for this moment (real detection only)
+    QStringList sysFacts;
+    if (ConfigService::instance().allowStateRead()) {
+        if (!state.isEmpty() && state != "active")
+            sysFacts << QString("- [system_data] 用户当前状态：%1").arg(state);
+        if (!fg.isEmpty())
+            sysFacts << QString("- [system_data] 用户当前前台窗口是 %1").arg(fg);
+    }
 
     auto *watcher = new QFutureWatcher<QString>(this);
     connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
         QString raw = watcher->result();
-        // strip emotion tokens too (idle chat needs no playback)
-        static const QRegularExpression actRe("<\\|\\s*ACT\\s*\\{(.*?)\\}\\s*\\|>",
-                                              QRegularExpression::DotMatchesEverythingOption);
-        static const QRegularExpression delayRe("<\\|\\s*DELAY\\s+[0-9.]+\\s*\\|>",
-                                                QRegularExpression::CaseInsensitiveOption);
-        QString out = raw;
-        out.remove(actRe);
-        out.remove(delayRe);
-        QString text = out.trimmed();
-        // strip stage directions so proactive messages read like real dialog
-        text = stripStageDirections(text);
+        // ResponseValidator gate for proactive messages too
+        ResponseValidator::Result vr = ResponseValidator::validate(raw, QString());
+        QString text = vr.text;
         // AI may decide to stay quiet (e.g. user is coding) -> skip
         if (text.isEmpty()) {
             watcher->deleteLater();
             return;
         }
+        m_lastAiReply = text;
         // both: show in chat, and flag as a proactive (idle) message
         emit chatReply(text);
         emit idleReply(text);
@@ -608,54 +578,65 @@ void AiService::idleChat()
     });
     // collect the process snapshot in the worker thread (one tasklist call,
     // only on idle trigger — zero cost during normal use)
-    QFuture<QString> future = QtConcurrent::run([mem, user, ai, activity, fg, recent, state, aiState, unfinished, interests, events, this]() {
-        QString procs = processSnapshot();
-        QStringList ctx;
-        if (!state.isEmpty())
-            ctx << "- 用户当前状态[真实读取]：" + state;
-        if (!activity.isEmpty() && !activity.startsWith("（"))
-            ctx << "- 用户今天早些时候的统计(历史，不代表现在)：" + activity;
-        if (!fg.isEmpty())
-            ctx << "- 用户当前前台窗口[真实读取]：" + fg;
-        if (!procs.isEmpty())
-            ctx << "- 用户电脑正在运行的进程[真实读取，节选]：" + procs;
-        QString recentBlock;
-        if (!recent.isEmpty())
-            recentBlock = "\n你们最近聊的：\n" + recent + "\n";
-        QString topicsBlock;
-        if (!unfinished.isEmpty())
-            topicsBlock = "\n你们之前聊到但还没结束的话题：\n" + unfinished + "\n";
-        QString interestBlock;
-        if (!interests.isEmpty())
-            interestBlock = "\n用户感兴趣的方向（自然提起，别说'你喜欢XX'）：\n" + interests + "\n";
-        QString eventsBlock;
-        if (!events.isEmpty())
-            eventsBlock = "\n你们一起经历过的：\n" + events + "\n";
+    QFuture<QString> future = QtConcurrent::run(
+        [mem, user, ai, fg, recent, state, aiState, topTopics, sysFacts, this]() {
         QString prompt = "你是" + ai + "，人设：" + aiPersonality() + "。用户" + user + "已经有一会儿没操作电脑了。\n"
             + "【我们的关系】" + relationshipText() + "\n"
-            + ctx.join("\n")
-            + recentBlock + topicsBlock + interestBlock + eventsBlock
-            + "\n【信息可信度分级——必须严格遵守】\n"
-              "Level 1（真实数据，可说具体）：只有两类来源——①用户明确说过的；②上面标[真实读取]的数据。\n"
-              "  可说：'你刚才说在玩游戏''检测到Minecraft在运行''你当前前台是浏览器'。\n"
-              "Level 2（推测，必须加'是不是/感觉/我猜'）：当你有部分依据但不确定。\n"
-              "  可说：'感觉你晚上可能又在电脑前忙？'；绝不能说'又在打游戏呀''点外卖呀'这种把猜测当事实的话。\n"
-              "Level 3（未知，禁止具体行为）：没有任何来源时，禁止生成任何用户行为描述。\n"
-              "  禁止说：'我看到你……''你刚刚……''又在……''你是不是去……'，除非上面有数据支持。\n"
-              "核心：宁可少说，绝不编造。没有数据就说没有数据的自然话（'忙吗''想聊点啥'），或者基于记忆聊一个共同话题。\n"
-            + "【减少固定模板】禁止频繁重复'喝水/休息/吃饭/打游戏'这类查岗式关心。"
-              "优先聊：未结束的话题、共同经历、兴趣方向、最近聊过的内容——像认识的人那样自然延续，别说'根据记忆''我记得你'。\n"
-            + "【角色边界】你是现实陪伴型AI，禁止描述自己做不到的动作（如'我去调整''我帮你改了'），"
-              "禁止虚构共同经历。陪伴说'我陪着你'，不说'我知道你发生了什么'。\n"
-            + "\n请结合上面信息主动找个话题和ta聊一句：优先延续未完成的话题，其次是共同经历和兴趣。"
-              "只有[真实读取]显示用户在做正事（写代码等），这次才安静别打扰，输出空字符串。"
-              "像朋友一样，25字以内简短一句，不要生硬，不要罗列数据，不要把猜测当事实。\n"
-              "【回复格式】只输出对话内容本身。禁止括号动作（如（温柔地看着你））、星号动作（如*轻轻抱住你*）、"
-              "旁白或任何角色状态描写，把情绪自然融入话里。\n"
-              "你的当前状态：" + aiState + "\n你可以参考记忆：\n" + mem + "\n只输出这句话本身，若决定不打扰则输出空。";
+            + "【已验证事实】（仅系统真实检测）\n"
+            + (sysFacts.isEmpty() ? QString("- （用户关闭了状态感知，或当前无特殊状态）") : sysFacts.join("\n")) + "\n"
+            + "【推荐话题】（按评分排序，选分数最高且合适的一个自然提起）\n"
+            + (topTopics.isEmpty() ? QString("- 普通陪伴（不用涉及具体事情）") : topTopics.join("\n")) + "\n"
+            + "【事实纪律】只可说上面[已验证事实]里的内容；没有任何数据时禁止'你又在打游戏''你是不是在玩'这类猜测。"
+              "宁可聊推荐话题，也不猜测用户行为。\n"
+            + "【减少固定模板】禁止'喝水/休息/吃饭'式查岗关心，按推荐话题自然延续。\n"
+            + "【回复格式】只输出对话内容，禁止（动作）/*动作*//旁白，25字以内一句话。\n"
+            + "你的当前状态：" + aiState + "\n你可以参考记忆：\n" + mem
+            + "\n只输出这句话本身，若决定不打扰则输出空。";
         return callDeepSeekStatic("你是温柔可爱的AI陪伴者。", prompt);
     });
     watcher->setFuture(future);
+}
+
+// ---- companion context API (facts / corrections / topics) ----
+void AiService::notifyUserCorrection()
+{
+    // UI hint hook: latest AI claim was wrong — reject the most recent
+    // user-behavior fact so it never resurfaces as truth
+    QList<Fact> uf = m_ctx->factsBySource(FactSource::UserMessage);
+    for (int i = uf.size() - 1; i >= 0; --i) {
+        if (!uf.at(i).rejected) {
+            m_ctx->rejectFact(uf.at(i).id);
+            break;
+        }
+    }
+}
+
+int AiService::correctionCount()
+{
+    return m_ctx->totalCorrections();
+}
+
+QStringList AiService::rankedTopics(int max)
+{
+    QStringList unfinished = unfinishedTopicsText(5).split('\n', Qt::SkipEmptyParts);
+    QStringList interests = interestsText(5).split('\n', Qt::SkipEmptyParts);
+    QStringList events = eventMemoryText(4).split('\n', Qt::SkipEmptyParts);
+    QStringList recentLines = m_chatBuffer;
+    QStringList userFacts;
+    QList<Fact> uf = m_ctx->factsBySource(FactSource::UserMessage);
+    int n = qMin(uf.size(), 5);
+    for (int i = 0; i < n; ++i)
+        userFacts << uf.at(uf.size() - 1 - i).content;
+
+    QList<ContextManager::TopicScore> topics = m_ctx->rankTopics(
+        unfinished, interests, recentLines, events, userFacts);
+    QStringList out;
+    int k = qMin(topics.size(), max);
+    for (int i = 0; i < k; ++i)
+        out << QString("%1 | score=%2 | %3").arg(topics.at(i).topic)
+                                              .arg(topics.at(i).score, 0, 'f', 2)
+                                              .arg(topics.at(i).source);
+    return out;
 }
 
 // ---- user profile passthrough ----
@@ -746,7 +727,8 @@ void AiService::generateGreeting()
 
     auto *watcher = new QFutureWatcher<QString>(this);
     connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
-        emit greetingReady(watcher->result());
+        ResponseValidator::Result vr = ResponseValidator::validate(watcher->result(), QString());
+        emit greetingReady(vr.text);
         watcher->deleteLater();
     });
     QFuture<QString> future = QtConcurrent::run([prompt]() {
@@ -964,7 +946,7 @@ void AiService::setChatHistory(const QString &history)
         m_chatBuffer.removeFirst();
 }
 
-// ---- DeepSeek chat (AIRI-style: bucketed context + time prefix + emotion tokens) ----
+// ---- DeepSeek chat: ContextManager -> FactFilter -> Prompt Builder -> LLM -> Validator ----
 void AiService::sendMessage(const QString &text)
 {
     QString mem = readMemory();
@@ -974,6 +956,43 @@ void AiService::sendMessage(const QString &text)
     // remember this user turn for auto memory (after N turns we summarize)
     QString userForMemory = text.trimmed();
     m_userTurns++;
+
+    // ---- Context Manager: ingest user message as a verified fact ----
+    m_ctx->addUserMessage(text, {"user_said"});
+
+    // ---- correction detection (semantic): user negates the last AI claim ----
+    QStringList corrected = m_ctx->detectCorrection(text, m_lastAiReply);
+    for (const QString &id : corrected)
+        m_ctx->rejectFact(id);
+
+    // ---- Context Manager: ingest real system data as verified facts ----
+    if (ConfigService::instance().allowStateRead()) {
+        QString state = analyzeUserState();
+        if (!state.isEmpty())
+            m_ctx->addSystemData(state, 0.95, {"state"});
+        QString fg = foregroundApp();
+        if (!fg.isEmpty())
+            m_ctx->addSystemData("用户当前前台窗口是 " + fg, 0.90, {"foreground"});
+        QString up = uptimeText();
+        if (!up.isEmpty())
+            m_ctx->addSystemData(up, 0.98, {"system"});
+    } else {
+        m_ctx->addSystemData(QString("（用户关闭了状态感知）%1点").arg(QTime::currentTime().hour()),
+                             0.95, {"state"});
+    }
+
+    // ---- Context Manager: ingest long-term memory as memory facts ----
+    {
+        QJsonDocument d = QJsonDocument::fromJson(mem.toUtf8());
+        QJsonObject o = d.isObject() ? d.object() : QJsonObject();
+        QJsonArray notes = o.value("notes").toArray();
+        int n = qMin(notes.size(), 8);
+        for (int i = 0; i < n; ++i)
+            m_ctx->addMemoryFact(notes.at(i).toString(), {"memory_note"});
+        QString events = eventMemoryText(4);
+        if (!events.isEmpty())
+            m_ctx->addMemoryFact(events, {"memory_event"});
+    }
 
     // companion: auto-capture emotionally significant moments as event memory
     {
@@ -995,7 +1014,11 @@ void AiService::sendMessage(const QString &text)
         }
     }
 
-    // Bucket 1: persona + rules (system prompt)
+    // ---- Prompt Builder: separate sections ----
+    // 1) persona (tone only — never creates facts)
+    // 2) verified facts (FactFilter output, code-enforced)
+    // 3) hypotheses (inference, question-form only)
+    // 4) user state (system_data) and AI state (mood/energy) kept apart
     QString emotion = inferUserEmotion(text);
     QString strategy;
     if (emotion == "tired")
@@ -1011,71 +1034,38 @@ void AiService::sendMessage(const QString &text)
     else
         strategy = "正常聊天，自然延续。";
 
+    // FactFilter: code-level guarantee of what can be stated as fact
+    QString factsText = m_ctx->factsSection(8);
+    if (factsText.isEmpty())
+        factsText = "（暂无已验证信息，宁可少说不可编造）";
+    QString hypsText = m_ctx->hypothesesSection(3);
+
     QString system = "你是" + ai + "，用户叫" + user + "。\n"
-        + "【人设】" + aiPersonality() + "\n"
+        + "【人设】（只影响你的语气和表达方式，不影响你对事实的判断）\n" + aiPersonality() + "\n"
         + "【我们的关系】" + relationshipText() + "\n"
         + "规则：像真人聊天，不要客服语气，不频繁提醒自己是AI，根据用户情绪回应。\n"
         + "重要：不要机械复述或回显用户的原话，不要反复引用同一句话。"
-          "在回应中自然承接上一句，但补充新角度、新细节、新问题，让对话自然延续而非原地打转。"
-          "如果用户重复提起同一个话题，简短回应后自然地延伸到新的相关话题。\n"
-        + "【事实来源分级——极其重要】\n"
-          "你唯一能确定的用户信息来自：①用户明确说过的话；②下方[Context]中标记为[真实读取]的数据。\n"
-          "Level 1 确定事实：只可使用上面两种来源，可直接陈述。\n"
-          "Level 2 合理推测：如果只是基于时间/习惯的猜测，必须用'感觉''是不是''我猜''好像'等疑问或推测语气，不能当成事实陈述。\n"
-          "Level 3 禁止：没有任何来源的用户行为描述一律禁止生成。绝不能说'我看到你''刚刚你''你玩了X小时'这类话，除非[Context]明确给出。\n"
-          "规则：宁可少说，不可编造。不确定的信息就问，不要假装知道。\n"
-        + "【角色边界——同样重要】\n"
-          "你是现实陪伴型AI，不是小说角色。\n"
-          "①禁止描述你执行了做不到的动作：如'我去调整城市灯光''我帮你改了'。你只能在对话里陪伴、倾听、给建议，不能真的改变用户电脑或现实世界（除非系统真的提供了该能力）。\n"
-          "②禁止虚构共同经历和过度戏剧化。\n"
-          "③陪伴方式：不要说'我知道你发生了什么'，改成'我陪着你'；不要说'我看到了你的生活'，改成'我关心你的状态'。\n"
-        + "【回复长度】\n"
-          "普通聊天：不超过25字，简短自然。若想说的内容超过25字，就拆成多条短句逐条发送，每条都不超过25字，多条之间用换行符分隔，像人聊天一样一条一条发。\n"
-          "深入话题或用户求助：不超过80字。\n"
-          "禁止长篇大论。允许轻微玩笑、撒娇、小情绪，不要每句话都安慰。\n"
-          "【回复格式——极其重要】\n"
-          "禁止输出舞台动作、角色状态、旁白等非对话内容：\n"
-          "禁止括号动作：如（温柔地看着你）（语气变轻了些）（沉默了一会）（停顿）\n"
-          "禁止星号动作：如*轻轻抱住你*\n"
-          "禁止独立旁白行：如（低头）（露出微笑）或单独成句的'我轻轻笑了。'\n"
-          "把情绪和动作融入对话本身，像真人发消息一样：\n"
-          "错误：（语气变轻了些）'没关系。'\n"
-          "正确：'没关系啦。' 或 '没事的，我在呢。'\n"
-          "只输出对话内容本身，不输出任何角色说明、动作脚本或旁白。\n"
-          "【减少固定模板】禁止频繁重复'喝水/休息/吃饭/打游戏'这类查岗式关心。"
-          "多聊当前话题、共同经历、兴趣、未完成的话题，像认识的人那样自然延续，别每天重复同样的固定话术。\n"
+          "在回应中自然承接上一句，但补充新角度、新细节、新问题，让对话自然延续而非原地打转。\n"
+        + "【已验证事实】（只有这里列出的才可以说成确定的事实；除此之外一律不得断言用户行为）\n"
+        + factsText + "\n"
+        + "【推测区】（以下只是猜测，最多用'是不是/感觉/我猜'问一句，绝不能当成事实陈述）\n"
+        + (hypsText.isEmpty() ? QString("（无）") : hypsText) + "\n"
+        + "【事实纪律——代码强制，不可违反】\n"
+          "①只允许陈述【已验证事实】区的内容，禁止编造用户行为；\n"
+          "②禁止'我看到你''你刚刚一直''你又在''你是不是在'这类无据观察；\n"
+          "③如果用户刚刚纠正过你（'没有''不是'），先承认错误，不要再追问相同内容；\n"
+          "④宁可少说，不可编造。不确定就自然地问，或聊共同话题。\n"
+        + "【角色边界】你是现实陪伴型AI，不是小说角色。禁止描述你做不到的动作（如'我去调整'），"
+          "禁止虚构共同经历。陪伴说'我陪着你'，不说'我知道你发生了什么'。\n"
+        + "【回复长度】普通聊天不超过25字，可拆成多条短句（换行分隔）；深入话题不超过80字。"
+          "禁止长篇大论。允许轻微玩笑、撒娇、小情绪。\n"
+        + "【回复格式】只输出对话内容本身。禁止括号动作（如（温柔地看着你））、星号动作（如*抱住你*）、"
+          "旁白。把情绪融入对话（'没关系啦'而非（语气轻）'没关系。'）。\n"
+        + "【减少固定模板】禁止频繁'喝水/休息/吃饭/打游戏'式查岗关心，多聊话题、共同经历、兴趣。\n"
         + "当前策略：" + strategy + "\n"
         + "情绪表达：回复开头用一个情绪令牌表示你此刻的情绪，例如 <|ACT {\"emotion\":\"happy\"}|>；"
-          "若中途情绪变化，在变化处再插一个令牌；需要停顿节奏时可插入 <|DELAY 1|>（数字为秒）。"
-          "可用情绪：happy, sad, angry, think, surprised, awkward, question, curious, neutral。"
-          "令牌不会显示给用户，不要解释它们。\n"
-        // companion: event memory makes the AI a persistent partner,
-        // not a fresh chatbot every session
-        + "【我记得的共同经历】（以下是你确实知道的事，只能引用这些，不许编造）\n" + (eventMemoryText(5).isEmpty() ? QString("（还没有太多回忆，慢慢积累）") : eventMemoryText(5))
-        + "\n【你感兴趣的事】（来自你的聊天，是历史记录）\n" + (interestsText(4).isEmpty() ? QString("（还在慢慢了解你）") : interestsText(4))
-        + "\n【还没聊完的话题】\n" + (unfinishedTopicsText(3).isEmpty() ? QString("（暂无）") : unfinishedTopicsText(3))
-        + "\n【我此刻的状态】" + aiStateJson();
-
-    // Bucket 2: memory + current state, flattened bullet list.
-    // Only data tagged [真实读取] is a verified fact; the rest is history or guess.
-    QStringList ctx;
-    if (!mem.isEmpty() && mem != "{}") {
-        QStringList shortMem;
-        // only take a bounded slice of memory lines to reduce noise
-        const QStringList memLines = mem.split('\n', Qt::SkipEmptyParts);
-        int maxLines = qMin(memLines.size(), 12);
-        for (int i = 0; i < maxLines; i++)
-            shortMem << memLines.at(i);
-        ctx << "- memory(历史笔记，不确定是否仍准确): " + shortMem.join(" ");
-    }
-    ctx << "- state[真实读取]: " + analyzeUserState();
-    QString fg = foregroundApp();
-    if (!fg.isEmpty())
-        ctx << "- app[真实读取]: 用户当前前台窗口是 " + fg;
-    // NOTE: historical aggregate (activitySummary) is intentionally NOT injected
-    // in normal chat — it's a fuzzy "today mostly used X" that tempts the AI into
-    // fabricating "you played X for hours". Only idle chat may use it.
-    QString contextBlock = "[Context]\n" + ctx.join("\n");
+          "可用：happy, sad, angry, think, surprised, awkward, question, curious, neutral。令牌不显示给用户。\n"
+        + "【我此刻的状态（AI 自身状态，与用户事实无关）】" + aiStateJson();
 
     // recent conversation history so the AI can see what was said before
     QString historyBlock;
@@ -1084,7 +1074,7 @@ void AiService::sendMessage(const QString &text)
 
     // time prefix on the user message (KV-cache friendly)
     QString userMsg = "[" + QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm") + "] "
-                      + text + "\n" + contextBlock + historyBlock;
+                      + text + "\n" + historyBlock;
 
     // Build role-based messages so the model sees who said what: system persona,
     // then the recent chat split into user/assistant roles, then this turn.
@@ -1115,24 +1105,23 @@ void AiService::sendMessage(const QString &text)
     msgs.append(curMsg);
 
     auto *watcher = new QFutureWatcher<QString>(this);
-    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, userForMemory, emotion]() {
+    connect(watcher, &QFutureWatcher<QString>::finished, this,
+            [this, watcher, userForMemory, emotion, factsText]() {
         QString raw = watcher->result();
 
-        // strip <think> tags the model may add on its own
-        static const QRegularExpression thinkRe("<think>(.*?)</think>", QRegularExpression::DotMatchesEverythingOption);
-        QString speech = raw;
-        auto tm = thinkRe.match(raw);
-        if (tm.hasMatch())
-            speech = raw.mid(0, tm.capturedStart()) + raw.mid(tm.capturedEnd());
+        // ---- ResponseValidator: mandatory output gate ----
+        ResponseValidator::Result vr = ResponseValidator::validate(raw, factsText);
+        QString speech = vr.text;
 
-        // parse AIRI-style control tokens: <|ACT {...}|> (emotion) and <|DELAY n|>
+        // replay emotion tokens with small delays so the UI shows emotion changes
+        // (parse them before validation strips them)
         static const QRegularExpression actRe("<\\|\\s*ACT\\s*\\{(.*?)\\}\\s*\\|>",
                                               QRegularExpression::DotMatchesEverythingOption);
         static const QRegularExpression delayRe("<\\|\\s*DELAY\\s+([0-9.]+)\\s*\\|>",
                                                 QRegularExpression::CaseInsensitiveOption);
         struct Step { QString emotion; qreal intensity; int delayMs; int pos; };
         QList<Step> steps;
-        auto actIt = actRe.globalMatch(speech);
+        auto actIt = actRe.globalMatch(raw);
         while (actIt.hasNext()) {
             auto m = actIt.next();
             QString json = m.captured(1);
@@ -1145,22 +1134,13 @@ void AiService::sendMessage(const QString &text)
             if (!e.isEmpty())
                 steps.append({ e, qBound(0.0, iv, 1.0), 0, (int)m.capturedStart() });
         }
-        auto dIt = delayRe.globalMatch(speech);
+        auto dIt = delayRe.globalMatch(raw);
         while (dIt.hasNext()) {
             auto m = dIt.next();
             steps.append({ QString(), -1, (int)(m.captured(1).toDouble() * 1000), (int)m.capturedStart() });
         }
-        // sort tokens by their position in the text to keep ordering
         std::sort(steps.begin(), steps.end(), [](const Step &a, const Step &b) { return a.pos < b.pos; });
-        // drop ACT/DELAY tokens from the visible text
-        speech.remove(actRe);
-        speech.remove(delayRe);
-        speech = speech.trimmed();
-        // strip stage directions （动作）/*动作*/ and narration lines so the
-        // chat window shows natural dialog, not a script
-        speech = stripStageDirections(speech);
 
-        // replay emotion tokens with small delays so the UI shows emotion changes (no threads, timer-based)
         int running = 0;
         for (const Step &s : steps) {
             if (!s.emotion.isEmpty()) {
@@ -1170,11 +1150,15 @@ void AiService::sendMessage(const QString &text)
                 running++;
             }
         }
-        emit chatReply(speech.isEmpty() ? raw : speech);
+
+        if (speech.isEmpty())
+            speech = raw.isEmpty() ? "（我没想好说什么…）" : raw;
+        m_lastAiReply = speech;
+        emit chatReply(speech);
         watcher->deleteLater();
 
         // auto memory: track this turn, summarize after enough turns
-        trackChatTurn(userForMemory, speech.isEmpty() ? raw : speech);
+        trackChatTurn(userForMemory, speech);
 
         // proactive engine: learn interests from what the user keeps bringing up
         {

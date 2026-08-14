@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(XiaoQinTools VERSION 3.5.22 LANGUAGES CXX)
+project(XiaoQinTools VERSION 3.6.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -36,6 +36,13 @@ set(APP_SOURCES
     src/Services/PluginManager.cpp
     src/Services/AiService.h
     src/Services/AiService.cpp
+    src/Services/FactModel.h
+    src/Services/ContextManager.h
+    src/Services/ContextManager.cpp
+    src/Services/FactFilter.h
+    src/Services/FactFilter.cpp
+    src/Services/ResponseValidator.h
+    src/Services/ResponseValidator.cpp
     src/Services/StatsService.h
     src/Services/StatsService.cpp
     src/Services/ContactService.h

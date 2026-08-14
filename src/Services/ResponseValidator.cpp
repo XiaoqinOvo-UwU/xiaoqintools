@@ -1,0 +1,110 @@
+#include "ResponseValidator.h"
+#include "FactFilter.h"
+#include <QRegularExpression>
+
+QString ResponseValidator::stripControlTokens(const QString &raw)
+{
+    static const QRegularExpression thinkRe("<think>(.*?)</think>",
+                                            QRegularExpression::DotMatchesEverythingOption);
+    static const QRegularExpression actRe("<\\|\\s*ACT\\s*\\{(.*?)\\}\\s*\\|>",
+                                          QRegularExpression::DotMatchesEverythingOption);
+    static const QRegularExpression delayRe("<\\|\\s*DELAY\\s+[0-9.]+\\s*\\|>",
+                                            QRegularExpression::CaseInsensitiveOption);
+    QString s = raw;
+    auto tm = thinkRe.match(s);
+    if (tm.hasMatch())
+        s = s.mid(0, tm.capturedStart()) + s.mid(tm.capturedEnd());
+    s.remove(actRe);
+    s.remove(delayRe);
+    return s;
+}
+
+QString ResponseValidator::stripStageDirections(const QString &raw)
+{
+    QString s = raw;
+    // full-width parens as literal chars (source is UTF-8; QRegularExpression
+    // does NOT understand \uXXXX escapes — use \x{...} or raw chars)
+    static const QRegularExpression parenRe(QStringLiteral("[（(][^（()]*[)）]"));
+    static const QRegularExpression starRe(QStringLiteral("\\*[^*\\n]*\\*"));
+    s.remove(parenRe);
+    s.remove(starRe);
+    // NOTE: no length-based line filtering here — natural replies are
+    // unquoted and can be long; line-level narration filtering happens in
+    // trimToDialog with a strict narration pattern.
+    return s.trimmed();
+}
+
+QString ResponseValidator::stripUnsupportedObservations(const QString &raw, const QString &factText)
+{
+    QString out = raw;
+    const QStringList lines = raw.split('\n');
+    QStringList kept;
+    for (const QString &line : lines) {
+        bool fabricated = false;
+        for (const QString &ph : FactFilter::observationPhrases()) {
+            if (line.contains(ph)) {
+                bool supported = false;
+                const QStringList facts = factText.split('\n');
+                for (const QString &f : facts) {
+                    QString cleanF = f;
+                    cleanF.remove(QRegularExpression("^-\\s*\\[[^\\]]+\\]\\s*"));
+                    if (!cleanF.isEmpty() && line.contains(cleanF.left(qMax(3, cleanF.size() / 2)))) {
+                        supported = true;
+                        break;
+                    }
+                }
+                if (!supported) { fabricated = true; break; }
+            }
+        }
+        if (!fabricated) kept << line;
+    }
+    return kept.join('\n').trimmed();
+}
+
+// keep dialog lines; drop only obvious standalone narration lines.
+// Natural replies are UNQUOTED ("没关系啦") and can be long, so we must not
+// drop long lines just because they lack quotes — that would silently kill
+// replies (and idle chat entirely). We only drop lines that read like
+// narration: verb-led, quote-less, and ending with 。.
+QString ResponseValidator::trimToDialog(const QString &raw)
+{
+    static const QRegularExpression narrRe(QStringLiteral(
+        "^(我|他|她|它|你|大家|房间|空气|气氛|周围)[^，。！？]{2,20}"
+        "(了|着|下|起|在|又|也|便|就|开始|继续|轻轻|默默|缓缓|低头|抬头|转身|露出|看着|听到|感到|觉得|想了|沉默|停顿|叹气|微笑|点头|摇头)"
+        "[^\"“”]*。$"));
+    QStringList kept;
+    for (const QString &line : raw.split('\n')) {
+        QString l = line.trimmed();
+        if (l.isEmpty()) continue;
+        bool hasQuote = l.contains(QString("\"")) || l.contains(QString("“")) || l.contains(QString("”"));
+        if (hasQuote) { kept << l; continue; }
+        // drop only high-confidence narration lines
+        if (l.length() > 8 && l.length() <= 60 && narrRe.match(l).hasMatch())
+            continue;
+        kept << l;
+    }
+    return kept.join('\n').trimmed();
+}
+
+ResponseValidator::Result ResponseValidator::validate(const QString &raw, const QString &verifiedFacts)
+{
+    Result r;
+    QString s = raw;
+    const QString before = s;
+
+    s = stripControlTokens(s);
+    s = stripStageDirections(s);
+
+    // observation fabrication check (uses the fact block as support base)
+    const QString withoutObs = stripUnsupportedObservations(s, verifiedFacts);
+    if (withoutObs != s)
+        r.observationsStripped = 1;
+    s = withoutObs;
+
+    s = trimToDialog(s);
+    s = s.trimmed();
+
+    r.text = s;
+    r.changed = (s != before);
+    return r;
+}

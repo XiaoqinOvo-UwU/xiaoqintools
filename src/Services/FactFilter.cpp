@@ -1,0 +1,81 @@
+#include "FactFilter.h"
+#include <QRegularExpression>
+#include <QStringList>
+
+QList<Fact> FactFilter::facts(const QList<Fact> &all)
+{
+    QList<Fact> out;
+    for (const Fact &f : all)
+        if (f.isFact()) out.append(f);
+    return out;
+}
+
+QList<Fact> FactFilter::hypotheses(const QList<Fact> &all)
+{
+    QList<Fact> out;
+    for (const Fact &f : all)
+        if (f.isHypothesis()) out.append(f);
+    return out;
+}
+
+QList<Fact> FactFilter::clean(const QList<Fact> &all, double minConfidence)
+{
+    QList<Fact> out;
+    for (const Fact &f : all) {
+        if (f.rejected) continue;
+        if (f.source == FactSource::UserMessage || f.source == FactSource::SystemData) {
+            if (f.confidence >= minConfidence) out.append(f);
+        } else {
+            out.append(f); // memory/hypothesis keep their own semantics
+        }
+    }
+    return out;
+}
+
+const QStringList &FactFilter::observationPhrases()
+{
+    static const QStringList phrases = {
+        "我看到你", "我注意到你", "我发现你", "你刚刚一直", "你刚刚在", "你一直在",
+        "你又在", "你总是", "你又去", "你是不是在", "你是不是又", "你正在", "你刚在",
+        "你又在玩", "你又在打",
+    };
+    return phrases;
+}
+
+const QStringList &FactFilter::stagePhrases()
+{
+    static const QStringList phrases = {}; // stage actions handled by regex
+    return phrases;
+}
+
+QString FactFilter::stripUnsupportedObservations(const QString &reply, const QString &factText)
+{
+    QString out = reply;
+    // split into lines so we can drop a whole fabricated line
+    const QStringList lines = reply.split('\n');
+    QStringList kept;
+    for (const QString &line : lines) {
+        bool fabricated = false;
+        for (const QString &ph : observationPhrases()) {
+            if (line.contains(ph)) {
+                // check whether any verified fact text also appears on this line
+                bool supported = false;
+                const QStringList facts = factText.split('\n');
+                for (const QString &f : facts) {
+                    QString cleanF = f;
+                    cleanF.remove(QRegularExpression("^-\\s*\\[[^\\]]+\\]\\s*"));
+                    if (!cleanF.isEmpty() && line.contains(cleanF.left(qMax(3, cleanF.size() / 2)))) {
+                        supported = true;
+                        break;
+                    }
+                }
+                if (!supported) {
+                    fabricated = true;
+                    break;
+                }
+            }
+        }
+        if (!fabricated) kept << line;
+    }
+    return kept.join('\n').trimmed();
+}
