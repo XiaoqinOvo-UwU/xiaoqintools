@@ -445,9 +445,8 @@ Page {
                             text: "检查更新"
                             Layout.fillWidth: true
                             onClicked: {
-                                root.note = "正在检查更新..."
+                                appCore.showIsland("正在检查更新...", [], "check_update")
                                 updateService.checkForUpdates()
-                                checkTimer.start()
                             }
                         }
                         AppButton {
@@ -466,23 +465,40 @@ Page {
                     }
 
                     // update download section (visible when an update is available)
+                    // theme-consistent inset panel: same dark fill/hairline border
+                    // as inputs, subtle left accent bar instead of a green wash.
                     Rectangle {
                         visible: updateService.updateAvailable
                         Layout.fillWidth: true
-                        Layout.preferredHeight: updateCol.implicitHeight + 16
-                        color: Qt.rgba(0.36,0.6,0.5,0.22)
-                        radius: 10
-                        border.color: Qt.rgba(0.4,0.8,0.6,0.35)
+                        Layout.preferredHeight: updateCol.implicitHeight + 20
+                        color: Theme.inputBg
+                        radius: Theme.rMd
+                        border.color: Qt.rgba(255,255,255,0.08)
                         border.width: 1
+
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            anchors.topMargin: 8
+                            anchors.bottomMargin: 8
+                            width: 3
+                            radius: 1.5
+                            color: Theme.accent
+                        }
+
                         ColumnLayout {
                             id: updateCol
                             anchors.fill: parent
-                            anchors.margins: 10
-                            spacing: 6
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 12
+                            anchors.topMargin: 10
+                            anchors.bottomMargin: 10
+                            spacing: 8
                             Text {
                                 Layout.fillWidth: true
                                 text: "发现新版本 " + updateService.latestVersion + "（当前 " + updateService.currentVersion() + "）"
-                                color: "#8FE0C0"
+                                color: Theme.text
                                 font.pixelSize: 13
                                 font.bold: true
                                 wrapMode: Text.Wrap
@@ -492,7 +508,14 @@ Page {
                                 visible: updateService.downloading
                                 from: 0; to: 100
                                 value: updateService.downloadProgress
-                                height: 6
+                                height: 5
+                                background: Rectangle { radius: 2; color: Theme.sliderTrack }
+                                contentItem: Rectangle {
+                                    implicitWidth: 1
+                                    implicitHeight: 5
+                                    radius: 2
+                                    color: Theme.sliderFill
+                                }
                             }
                             RowLayout {
                                 Layout.fillWidth: true
@@ -506,7 +529,7 @@ Page {
                                 AppButton {
                                     text: "忽略"
                                     Layout.fillWidth: true
-                                    onClicked: root.note = "本次忽略更新"
+                                    onClicked: appCore.showToast("已忽略本次更新")
                                 }
                             }
                         }
@@ -591,25 +614,22 @@ Page {
                 visible: root.note.length > 0
             }
 
-            Timer {
-                id: checkTimer
-                interval: 3000
-                repeat: false
-                onTriggered: {
-                    if (updateService.updateAvailable) {
-                        root.note = "发现新版本 " + updateService.latestVersion + "，可点「下载并安装」"
-                    } else if (updateService.lastError.length > 0) {
-                        root.note = updateService.lastError
-                    } else {
-                        root.note = "当前已是最新版本"
-                    }
-                }
-            }
-
             Connections {
                 target: updateService
+                // result of the version check -> shown on the dynamic island
+                // (single decision point routed via AppCore) + inline note.
+                function onCheckFinished(ok) {
+                    if (updateService.updateAvailable) {
+                        // download prompt lives in the inline panel below
+                        // (visible: updateService.updateAvailable) — not the island.
+                        return
+                    } else if (updateService.lastError.length > 0) {
+                        appCore.showIsland(updateService.lastError, [])
+                    } else {
+                        appCore.showIsland("当前已是最新版本 v" + updateService.currentVersion(), [])
+                    }
+                }
                 function onDownloadFinished(ok, message) {
-                    root.note = message
                     appCore.showToast(message)
                 }
             }
@@ -619,7 +639,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小钦的工具 v3.8.6 · 泉此方天下第一"
+                text: "小钦的工具 v" + updateService.currentVersion() + " · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
             }
