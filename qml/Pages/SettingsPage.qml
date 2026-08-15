@@ -21,7 +21,7 @@ Page {
 
         PageHeader {
             title: "设置"
-            subtitle: "梯子路径、AI 配置与更新检查"
+                subtitle: "按你的习惯，把一切都调好"
         }
 
         ScrollView {
@@ -40,7 +40,7 @@ Page {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: col1.implicitHeight + 36
-                color: Qt.rgba(255,255,255,0.05)
+                color: Theme.surface
                 radius: 12
                 border.color: Qt.rgba(255,255,255,0.10)
                 border.width: 1
@@ -85,7 +85,7 @@ Page {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: col2.implicitHeight + 36
-                color: Qt.rgba(255,255,255,0.05)
+                color: Theme.surface
                 radius: 12
                 border.color: Qt.rgba(255,255,255,0.10)
                 border.width: 1
@@ -169,7 +169,7 @@ Page {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: col3.implicitHeight + 36
-                color: Qt.rgba(255,255,255,0.05)
+                color: Theme.surface
                 radius: 12
                 border.color: Qt.rgba(255,255,255,0.10)
                 border.width: 1
@@ -414,7 +414,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "小钦的工具 v3.6.0 · 泉此方天下第一"
+                text: "小钦的工具 v3.7.0 · 泉此方天下第一"
                 color: Theme.textDim
                 font.pixelSize: 12
             }

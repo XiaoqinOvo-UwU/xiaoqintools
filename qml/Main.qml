@@ -188,22 +188,22 @@ ApplicationWindow {
                         border.width: 1
                     }
                     MenuItem {
-                        text: "✏️ 编辑资料"
+                        text: "编 辑资料"
                         onClicked: profileDialog.open()
                     }
                     MenuItem {
-                        text: "⚙ 设置"
+                        text: "设 置"
                         onClicked: root.currentPage = 3
                     }
                     MenuItem {
-                        text: "💾 导出配置"
+                        text: "导 出配置"
                         onClicked: {
                             var ok = syncService.exportConfig(syncService.defaultExportPath())
                             islandToast.show(ok ? "配置已导出到杂货铺" : "导出失败")
                         }
                     }
                     MenuItem {
-                        text: "❌ 退出"
+                        text: "退 出"
                         onClicked: Qt.quit()
                     }
                 }
@@ -224,6 +224,9 @@ ApplicationWindow {
                         id: contactItem
                         Layout.fillWidth: true
                         Layout.preferredHeight: 58
+                        Layout.leftMargin: Theme.sp2
+                        Layout.rightMargin: Theme.sp2
+                        radius: Theme.rMd
                         // selected contact: only a thin left indicator bar (no full highlight)
                         color: cHover ? Theme.hoverBg : "transparent"
                         property bool cHover: false
@@ -354,13 +357,13 @@ ApplicationWindow {
 
                 Item { Layout.fillHeight: true }
 
-                // ---- nav items (lower-middle) ----
+                // ---- nav items (lower-middle) — continuous sidebar list ----
                 Repeater {
                     model: ListModel {
-                        ListElement { icon: "🚀"; label: "网络" }
-                        ListElement { icon: "🖥"; label: "系统" }
-                        ListElement { icon: "🎵"; label: "娱乐" }
-                        ListElement { icon: "⚙"; label: "设置" }
+                        ListElement { label: "网络" }
+                        ListElement { label: "系统" }
+                        ListElement { label: "娱乐" }
+                        ListElement { label: "设置" }
                     }
                     Rectangle {
                         id: navItem
@@ -369,24 +372,15 @@ ApplicationWindow {
                         // when the chat page is open, no nav tab stays highlighted
                         readonly property bool active: !root.chatOpen && root.currentPage === myIndex
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 44
-                        color: active ? Theme.selected
-                             : hovered ? Theme.hoverBg
+                        Layout.preferredHeight: 40
+                        // continuous list: transparent default, faint hover tint,
+                        // single flat active block (no border / no outline / no card)
+                        color: active ? Qt.rgba(1,1,1,0.06)
+                             : hovered ? Qt.rgba(1,1,1,0.035)
                              : "transparent"
-                        Behavior on color { ColorAnimation { duration: 150 } }
+                        Behavior on color { ColorAnimation { duration: 140 } }
                         focus: true
-                        FocusScope {
-                            anchors.fill: parent
-                            Rectangle {
-                                anchors.fill: parent
-                                color: "transparent"
-                                border.color: Theme.focusRing
-                                border.width: 1
-                                radius: Theme.rMd
-                                visible: parent.activeFocus
-                                opacity: 0.9
-                            }
-                        }
+
                         Keys.onReturnPressed: activate()
                         Keys.onEnterPressed: activate()
                         Keys.onSpacePressed: activate()
@@ -395,35 +389,18 @@ ApplicationWindow {
                             root.chatOpen = false
                         }
 
-                        Rectangle {
-                            width: 3; height: active ? 22 : 0
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left
-                            color: Theme.textDim
-                            radius: 1.5
-                            opacity: active ? 1 : 0
-                            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                            Behavior on opacity { NumberAnimation { duration: 180 } }
-                        }
-
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 18
-                            anchors.rightMargin: 16
-                            spacing: 12
-                            Text {
-                                text: model.icon
-                                font.pixelSize: 17
-                                Layout.preferredWidth: 22
-                                opacity: active ? 1 : 0.7
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
-                            }
+                            anchors.leftMargin: Theme.sp4
+                            anchors.rightMargin: Theme.sp3
+                            spacing: Theme.sp3
                             Text {
                                 text: model.label
-                                color: active ? "white" : Theme.textDim
-                                font.pixelSize: 14
-                                font.bold: active
+                                color: active ? Theme.text : Theme.textDim
+                                font.pixelSize: Theme.fsDefault
+                                font.weight: active ? Font.DemiBold : Font.Normal
                             }
+                            Item { Layout.fillWidth: true }
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -442,7 +419,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.6.0"
+                        text: "小钦的工具 v3.7.0"
                         color: Theme.textDim
                         font.pixelSize: Theme.fsCaption
                     }
@@ -587,119 +564,196 @@ ApplicationWindow {
         }
     }
 
-    // ================= AI PROFILE DIALOG (click AI avatar in chat) =================
-    Dialog {
+    // =====================================================================
+    // AI PROFILE — single unified container (no nested dialogs)
+    // page 0 = overview (header + category cards)
+    // pages 1..6 = detail panels for each category (back button returns)
+    // =====================================================================
+    DialogContainer {
         id: aiProfileDialog
-        width: 440
-        height: 600
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle {
-            color: Theme.surface
-            radius: 14
-            border.color: Theme.glassBorder
-            border.width: 1
-        }
-        header: Item {
-            height: 44
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 8
-                spacing: 10
-                Rectangle {
-                    width: 34; height: 34
-                    radius: 17
-                    color: Theme.accent
-                    clip: true
-                    Image {
-                        anchors.fill: parent
-                        visible: root.aiAvatarPath.length > 0
-                        source: root.aiAvatarPath
-                        fillMode: Image.PreserveAspectCrop
-                    }
-                    Text {
-                        anchors.centerIn: parent
-                        visible: root.aiAvatarPath.length === 0
-                        text: aiService.aiName().length > 0 ? aiService.aiName().charAt(0) : "A"
-                        color: "white"
-                        font.pixelSize: 15
-                        font.bold: true
-                    }
-                }
-                Text {
-                    text: "AI 资料"
-                    color: Theme.text
-                    font.pixelSize: 16
-                    font.bold: true
-                    Layout.fillWidth: true
-                }
-                AppButton {
-                    text: "✕"
-                    implicitWidth: 30
-                    implicitHeight: 30
-                    btnRadius: 15
-                    onClicked: aiProfileDialog.close()
-                }
-            }
-        }
-        contentItem: ColumnLayout {
-            id: profileCol
-            width: aiProfileDialog.width - 36
-            spacing: 10
+        dialogTitle: "AI 资料"
+        dialogSubtitle: "角色、记忆与关系管理"
+        dialogWidth: 600
+        dialogHeight: 640
 
-                Text { text: "AI 名字"; color: Theme.textDim; font.pixelSize: 12 }
-                TextField {
-                    id: profileAiName
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 36
-                    color: Theme.text
-                    text: aiService.aiName()
-                    background: Rectangle { color: Theme.inputBg; radius: 8 }
-                }
-                Text { text: "AI 人设"; color: Theme.textDim; font.pixelSize: 12 }
-                // scrollable editor: ScrollView provides the scrollbar & wheel
-                // scrolling (same pattern as the note list), so long personas
-                // never stretch the dialog
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 160
-                    color: Theme.inputBg
-                    radius: 8
-                    clip: true
-                    ScrollView {
-                        anchors.fill: parent
-                        anchors.margins: 8
-                        clip: true
-                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
-                        TextArea {
-                            id: profileAiPersonality
-                            width: parent.width - 8
-                            height: Math.max(parent.height, implicitHeight)
-                            color: Theme.text
-                            text: aiService.aiPersonality()
-                            wrapMode: TextEdit.Wrap
-                            background: null
-                        }
-                    }
-                }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 10
-                    AppButton {
-                        text: "🖼 上传头像"
+        // detail navigation state
+        property int detailPage: 0   // 0=overview, 1..6=detail
+
+        function showDetail(p) {
+            aiProfileDialog.detailPage = p
+            profileStack.currentIndex = p
+            aiProfileDialog.dialogTitle = aiProfileDialog.detailTitle(p)
+            aiProfileDialog.dialogSubtitle = aiProfileDialog.detailSubtitle(p)
+        }
+        function showOverview() {
+            aiProfileDialog.detailPage = 0
+            profileStack.currentIndex = 0
+            aiProfileDialog.dialogTitle = "AI 资料"
+            aiProfileDialog.dialogSubtitle = "角色、记忆与关系管理"
+        }
+        function detailTitle(p) {
+            return ["AI 资料", "AI 人设", "共同经历", "与我的关系", "我的兴趣", "未完成话题", "使用统计"][p]
+        }
+        function detailSubtitle(p) {
+            return ["角色、记忆与关系管理",
+                    "角色设定和性格",
+                    "重要事件记忆",
+                    "亲密度和关系设置",
+                    "兴趣偏好",
+                    "聊天中断的话题",
+                    "陪伴时间"][p]
+        }
+
+        StackLayout {
+            id: profileStack
+            anchors.fill: parent
+            currentIndex: aiProfileDialog.detailPage
+
+            // ---------------- page 0: overview ----------------
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.sp5
+                    spacing: Theme.sp3
+
+                    ProfileHeader {
                         Layout.fillWidth: true
-                        implicitHeight: 34
-                        onClicked: {
+                        avatarSource: root.aiAvatarPath
+                        name: aiService.aiName()
+                        status: "在线"
+                        statusOnline: true
+                        onAvatarClicked: {
                             fileDialog.avatarTarget = "ai"
                             fileDialog.open()
                         }
                     }
-                    AppButton {
-                        text: "保存资料"
+
+                    // category cards
+                    SettingCard {
                         Layout.fillWidth: true
-                        implicitHeight: 34
+                        iconText: "A"
+                        title: "AI 人设"
+                        description: "角色设定和性格"
+                        onClicked: aiProfileDialog.showDetail(1)
+                    }
+                    SettingCard {
+                        Layout.fillWidth: true
+                        iconText: "E"
+                        title: "共同经历"
+                        description: "重要事件记忆"
+                        onClicked: aiProfileDialog.showDetail(2)
+                    }
+                    SettingCard {
+                        Layout.fillWidth: true
+                        iconText: "R"
+                        title: "与我的关系"
+                        description: "亲密度和关系设置"
+                        onClicked: aiProfileDialog.showDetail(3)
+                    }
+                    SettingCard {
+                        Layout.fillWidth: true
+                        iconText: "I"
+                        title: "我的兴趣"
+                        description: "兴趣偏好"
+                        onClicked: aiProfileDialog.showDetail(4)
+                    }
+                    SettingCard {
+                        Layout.fillWidth: true
+                        iconText: "T"
+                        title: "未完成话题"
+                        description: "聊天中断的话题"
+                        onClicked: aiProfileDialog.showDetail(5)
+                    }
+                    SettingCard {
+                        Layout.fillWidth: true
+                        iconText: "S"
+                        title: "使用统计"
+                        description: "陪伴时间"
+                        onClicked: aiProfileDialog.showDetail(6)
+                    }
+
+                    Item { Layout.fillHeight: true }
+
+                    // memory quick actions
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.sp3
+                        AppButton {
+                            text: "添加记忆"
+                            variant: "secondary"
+                            Layout.fillWidth: true
+                            onClicked: {
+                                memoryInput.text = ""
+                                memoryInputDialog.open()
+                            }
+                        }
+                        AppButton {
+                            text: "清空记忆"
+                            variant: "secondary"
+                            Layout.fillWidth: true
+                            borderColor: Qt.rgba(0.77,0.35,0.35,0.55)
+                            onClicked: {
+                                aiService.clearMemory()
+                                islandToast.show("记忆已清空~")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---------------- page 1: AI 人设 ----------------
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.sp5
+                    spacing: Theme.sp3
+
+                    AppButton {
+                        text: "‹ 返回"
+                        variant: "ghost"
+                        implicitWidth: 80
+                        onClicked: aiProfileDialog.showOverview()
+                    }
+                    Text { text: "AI 名字"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    TextField {
+                        id: profileAiName
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 38
+                        color: Theme.text
+                        text: aiService.aiName()
+                        background: Rectangle { color: Theme.inputBg; radius: Theme.rMd }
+                        onAccepted: saveProfileBtn.clicked()
+                    }
+                    Text { text: "AI 人设"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: Theme.inputBg
+                        radius: Theme.rMd
+                        clip: true
+                        ScrollView {
+                            anchors.fill: parent
+                            anchors.margins: Theme.sp2
+                            clip: true
+                            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                            TextArea {
+                                id: profileAiPersonality
+                                width: parent.width - Theme.sp2
+                                height: Math.max(parent.height, implicitHeight)
+                                color: Theme.text
+                                text: aiService.aiPersonality()
+                                placeholderText: "描述 AI 的性格、语气与陪伴风格…"
+                                placeholderTextColor: Theme.textDim
+                                wrapMode: TextEdit.Wrap
+                                background: null
+                            }
+                        }
+                    }
+                    AppButton {
+                        id: saveProfileBtn
+                        text: "保存 AI 人设"
+                        variant: "primary"
+                        Layout.fillWidth: true
                         onClicked: {
                             aiService.setAiName(profileAiName.text)
                             aiService.setAiPersonality(profileAiPersonality.text)
@@ -708,558 +762,311 @@ ApplicationWindow {
                         }
                     }
                 }
+            }
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 1
-                    color: Qt.rgba(255,255,255,0.08)
-                }
+            // ---------------- page 2: 共同经历 (read-only) ----------------
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.sp5
+                    spacing: Theme.sp3
 
-                Text { text: "AI 记忆"; color: Theme.text; font.pixelSize: 14; font.bold: true }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 10
                     AppButton {
-                        text: "📖 查看记忆"
+                        text: "‹ 返回"
+                        variant: "ghost"
+                        implicitWidth: 80
+                        onClicked: aiProfileDialog.showOverview()
+                    }
+                    ScrollView {
                         Layout.fillWidth: true
-                        implicitHeight: 34
-                        onClicked: memoryDialog.open()
-                    }
-                    AppButton {
-                        text: "➕ 添加记忆"
-                        Layout.fillWidth: true
-                        implicitHeight: 34
-                        onClicked: {
-                            memoryInput.text = ""
-                            memoryInputDialog.open()
-                        }
-                    }
-                    AppButton {
-                        text: "🗑 清空"
-                        Layout.fillWidth: true
-                        implicitHeight: 34
-                        glassColor: Qt.rgba(0.77,0.35,0.35,0.35)
-                        onClicked: {
-                            aiService.clearMemory()
-                            islandToast.show("记忆已清空~")
-                        }
-                    }
-                }
-
-                Item { Layout.preferredHeight: 10 }
-            }
-    }
-
-    // ================= MEMORY DIALOGS =================
-    // main memory dialog: category list, each opens its own viewer/editor
-    Dialog {
-        id: memoryDialog
-        width: 500
-        height: 480
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle {
-            color: Theme.surface
-            radius: 14
-            border.color: Theme.glassBorder
-            border.width: 1
-        }
-        header: Item {
-            height: 40
-            Text {
-                anchors.centerIn: parent
-                text: "AI 的记忆"
-                color: Theme.text
-                font.pixelSize: 16
-                font.bold: true
-            }
-            AppButton {
-                anchors.right: parent.right
-                anchors.rightMargin: 6
-                anchors.verticalCenter: parent.verticalCenter
-                text: "✕"
-                implicitWidth: 30
-                implicitHeight: 30
-                btnRadius: 15
-                onClicked: memoryDialog.close()
-            }
-        }
-        contentItem: ScrollView {
-            clip: true
-            ScrollBar.vertical.policy: ScrollBar.AsNeeded
-            ColumnLayout {
-                width: parent.width
-                spacing: 8
-
-                // 用户笔记
-                AppButton {
-                    Layout.fillWidth: true
-                    implicitHeight: 40
-                    text: "📝 用户笔记（你告诉过我的事）"
-                    onClicked: { notesDialog.open() }
-                }
-                // 共同经历
-                AppButton {
-                    Layout.fillWidth: true
-                    implicitHeight: 40
-                    text: "📌 共同经历（事件记忆）"
-                    onClicked: { memoryCat.openCat("共同经历", aiService.eventMemoryText(50), false) }
-                }
-                // 关系
-                AppButton {
-                    Layout.fillWidth: true
-                    implicitHeight: 40
-                    text: "💞 与我的关系（亲密度/信任度，可调整）"
-                    onClicked: { relationshipDialog.open() }
-                }
-                // 兴趣
-                AppButton {
-                    Layout.fillWidth: true
-                    implicitHeight: 40
-                    text: "⭐ 我的兴趣（可编辑）"
-                    onClicked: { interestsDialog.open() }
-                }
-                // 未完成话题
-                AppButton {
-                    Layout.fillWidth: true
-                    implicitHeight: 40
-                    text: "💬 未完成话题（可编辑）"
-                    onClicked: { topicsDialog.open() }
-                }
-                // 使用时长
-                AppButton {
-                    Layout.fillWidth: true
-                    implicitHeight: 40
-                    text: "⏱ 使用时长"
-                    onClicked: { memoryCat.openCat("时长", aiService.usageText(), false) }
-                }
-            }
-        }
-    }
-
-    // generic category dialog: view-only or editable (JSON-ish text)
-    Dialog {
-        id: memoryCat
-        property string catTitle: ""
-        property bool editable: false
-        property bool isRelationship: false
-        width: 500
-        height: 460
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle {
-            color: Theme.surface
-            radius: 14
-            border.color: Theme.glassBorder
-            border.width: 1
-        }
-        function openCat(title, content, edit, rel) {
-            memoryCat.catTitle = title
-            memoryCat.editable = edit
-            memoryCat.isRelationship = rel || false
-            catViewText.text = content
-            catEditText.text = content
-            catEditText.visible = edit
-            catViewText.visible = !edit
-            saveBtn.visible = edit
-            memoryCat.open()
-        }
-        header: Item {
-            height: 40
-            Text {
-                anchors.centerIn: parent
-                text: memoryCat.catTitle
-                color: Theme.text
-                font.pixelSize: 16
-                font.bold: true
-            }
-            AppButton {
-                anchors.right: parent.right
-                anchors.rightMargin: 6
-                anchors.verticalCenter: parent.verticalCenter
-                text: "✕"
-                implicitWidth: 30
-                implicitHeight: 30
-                btnRadius: 15
-                onClicked: memoryCat.close()
-            }
-        }
-        contentItem: ColumnLayout {
-            spacing: 8
-            TextArea {
-                id: catViewText
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                readOnly: true
-                color: Theme.text
-                font.pixelSize: 13
-                wrapMode: TextEdit.Wrap
-                background: null
-            }
-            TextArea {
-                id: catEditText
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                color: Theme.text
-                font.pixelSize: 12
-                wrapMode: TextEdit.Wrap
-                placeholderText: "可编辑的配置内容（JSON 格式）"
-            }
-            AppButton {
-                id: saveBtn
-                Layout.fillWidth: true
-                implicitHeight: 36
-                text: "💾 保存"
-                visible: false
-                onClicked: {
-                    var t = catEditText.text.trim()
-                    if (memoryCat.catTitle === "兴趣") aiService.setInterestsRaw(t)
-                    else if (memoryCat.catTitle === "未完成话题") aiService.setUnfinishedRaw(t)
-                    else if (memoryCat.catTitle === "关系") {
-                        try {
-                            var robj = JSON.parse(t)
-                            aiService.setRelationship(parseInt(robj.intimacy) || 0, parseInt(robj.trust) || 0)
-                            islandToast.show("关系已更新~")
-                            memoryCat.close()
-                            return
-                        } catch (e) { islandToast.show("格式错误：需要 {\"intimacy\":70,\"trust\":80}") }
-                    }
-                    islandToast.show(memoryCat.catTitle + " 已保存~")
-                    memoryCat.close()
-                }
-            }
-        }
-    }
-
-    // ================= FRIENDLY CATEGORY DIALOGS =================
-    // 用户笔记：列表 + 增删
-    Dialog {
-        id: notesDialog
-        width: 460
-        height: 420
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
-        header: Item {
-            height: 40
-            Text { anchors.centerIn: parent; text: "用户笔记"; color: Theme.text; font.pixelSize: 16; font.bold: true }
-            AppButton {
-                anchors.right: parent.right; anchors.rightMargin: 6
-                anchors.verticalCenter: parent.verticalCenter
-                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
-                onClicked: notesDialog.close()
-            }
-        }
-        contentItem: ColumnLayout {
-            spacing: 8
-            ListView {
-                id: notesListView
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                spacing: 4
-                model: aiService.noteList()
-                delegate: RowLayout {
-                    width: notesListView.width
-                    spacing: 8
-                    Text {
-                        Layout.fillWidth: true
-                        text: modelData
-                        color: Theme.text
-                        font.pixelSize: 12
-                        wrapMode: Text.Wrap
-                    }
-                    AppButton {
-                        text: "删"
-                        implicitWidth: 34; implicitHeight: 30
-                        onClicked: {
-                            aiService.removeNote(index)
-                            notesListView.model = aiService.noteList()
+                        Layout.fillHeight: true
+                        clip: true
+                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                        TextArea {
+                            id: eventsText
+                            width: parent.width
+                            color: Theme.text
+                            font.pixelSize: Theme.fsDefault
+                            readOnly: true
+                            wrapMode: TextEdit.Wrap
+                            background: null
+                            text: aiService.eventMemoryText(50)
                         }
                     }
                 }
             }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                TextField {
-                    id: noteInput
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 36
-                    color: Theme.text
-                    placeholderText: "告诉 AI 一件值得记住的事..."
-                    background: Rectangle { color: Theme.inputBg; radius: 8 }
-                }
-                AppButton {
-                    text: "添加"
-                    implicitHeight: 36
-                    onClicked: {
-                        aiService.addMemoryNote(noteInput.text)
-                        noteInput.text = ""
-                        notesListView.model = aiService.noteList()
-                    }
-                }
-            }
-        }
-    }
 
-    Dialog {
-        id: relationshipDialog
-        width: 440
-        height: 320
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
-        header: Item {
-            height: 40
-            Text { anchors.centerIn: parent; text: "与我的关系"; color: Theme.text; font.pixelSize: 16; font.bold: true }
-            AppButton {
-                anchors.right: parent.right; anchors.rightMargin: 6
-                anchors.verticalCenter: parent.verticalCenter
-                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
-                onClicked: relationshipDialog.close()
-            }
-        }
-        contentItem: ColumnLayout {
-            spacing: 12
-            Text { text: "亲密度"; color: Theme.textDim; font.pixelSize: 12 }
-            RowLayout {
-                Layout.fillWidth: true
-                DarkSlider {
-                    id: relIntimacy
-                    Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.relationshipIntimacy()
-                    onValueChanged: aiService.setRelationship(value, aiService.relationshipTrust())
-                }
-                Text { text: relIntimacy.value; color: Theme.textDim; font.pixelSize: 11 }
-            }
-            Text { text: "信任度"; color: Theme.textDim; font.pixelSize: 12 }
-            RowLayout {
-                Layout.fillWidth: true
-                DarkSlider {
-                    id: relTrust
-                    Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
-                    Component.onCompleted: value = aiService.relationshipTrust()
-                    onValueChanged: aiService.setRelationship(aiService.relationshipIntimacy(), value)
-                }
-                Text { text: relTrust.value; color: Theme.textDim; font.pixelSize: 11 }
-            }
-            Text {
-                Layout.fillWidth: true
-                // live text: recomputes whenever the sliders move
-                text: {
-                    var itm = relIntimacy.value
-                    var tr = relTrust.value
-                    var level = "刚认识"
-                    if (itm >= 80) level = "形影不离"
-                    else if (itm >= 60) level = "很亲近"
-                    else if (itm >= 40) level = "好朋友"
-                    else if (itm >= 20) level = "逐渐熟悉"
-                    return "亲密度 " + itm + "，信任度 " + tr + "：" + level + " 的关系。AI 会记住我们认识的深度，保持关系连续性。"
-                }
-                color: Theme.textDim
-                font.pixelSize: 11
-                wrapMode: Text.Wrap
-                horizontalAlignment: Text.AlignHCenter
-            }
-        }
-    }
+            // ---------------- page 3: 与我的关系 ----------------
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.sp5
+                    spacing: Theme.sp4
 
-    Dialog {
-        id: interestsDialog
-        width: 460
-        height: 420
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
-        header: Item {
-            height: 40
-            Text { anchors.centerIn: parent; text: "我的兴趣"; color: Theme.text; font.pixelSize: 16; font.bold: true }
-            AppButton {
-                anchors.right: parent.right; anchors.rightMargin: 6
-                anchors.verticalCenter: parent.verticalCenter
-                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
-                onClicked: interestsDialog.close()
-            }
-        }
-        contentItem: ColumnLayout {
-            spacing: 8
-            ListView {
-                id: interestsListView
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                spacing: 4
-                model: aiService.interestList()
-                delegate: RowLayout {
-                    width: interestsListView.width
-                    spacing: 8
-                    Text {
-                        Layout.fillWidth: true
-                        text: modelData
-                        color: Theme.text
-                        font.pixelSize: 12
-                    }
                     AppButton {
-                        text: "删"
-                        implicitWidth: 34; implicitHeight: 30
-                        onClicked: {
-                            aiService.removeInterest(modelData)
-                            interestsListView.model = aiService.interestList()
+                        text: "‹ 返回"
+                        variant: "ghost"
+                        implicitWidth: 80
+                        onClicked: aiProfileDialog.showOverview()
+                    }
+                    Card {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: Theme.sp4
+                            spacing: Theme.sp3
+
+                            Text { text: "亲密度"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                DarkSlider {
+                                    id: relIntimacy
+                                    Layout.fillWidth: true
+                                    from: 0; to: 100; stepSize: 5
+                                    Component.onCompleted: value = aiService.relationshipIntimacy()
+                                    onValueChanged: aiService.setRelationship(value, aiService.relationshipTrust())
+                                }
+                                Text { text: relIntimacy.value; color: Theme.textDim; font.pixelSize: Theme.fsCaption }
+                            }
+                            Text { text: "信任度"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                DarkSlider {
+                                    id: relTrust
+                                    Layout.fillWidth: true
+                                    from: 0; to: 100; stepSize: 5
+                                    Component.onCompleted: value = aiService.relationshipTrust()
+                                    onValueChanged: aiService.setRelationship(aiService.relationshipIntimacy(), value)
+                                }
+                                Text { text: relTrust.value; color: Theme.textDim; font.pixelSize: Theme.fsCaption }
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: {
+                                    var itm = relIntimacy.value
+                                    var tr = relTrust.value
+                                    var level = "刚认识"
+                                    if (itm >= 80) level = "形影不离"
+                                    else if (itm >= 60) level = "很亲近"
+                                    else if (itm >= 40) level = "好朋友"
+                                    else if (itm >= 20) level = "逐渐熟悉"
+                                    return "亲密度 " + itm + "，信任度 " + tr + "：" + level + " 的关系。"
+                                }
+                                color: Theme.textDim
+                                font.pixelSize: Theme.fsSmall
+                                wrapMode: Text.Wrap
+                            }
+                            Item { Layout.fillHeight: true }
                         }
                     }
                 }
             }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                TextField {
-                    id: interestInput
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 36
-                    color: Theme.text
-                    placeholderText: "添加一个兴趣（如 Minecraft）..."
-                    background: Rectangle { color: Theme.inputBg; radius: 8 }
-                }
-                AppButton {
-                    text: "添加"
-                    implicitHeight: 36
-                    onClicked: {
-                        aiService.addInterest(interestInput.text)
-                        interestInput.text = ""
-                        interestsListView.model = aiService.interestList()
-                    }
-                }
-            }
-        }
-    }
 
-    // 未完成话题：列表 + 增删
-    Dialog {
-        id: topicsDialog
-        width: 460
-        height: 420
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle { color: Theme.surface; radius: 14; border.color: Theme.glassBorder; border.width: 1 }
-        header: Item {
-            height: 40
-            Text { anchors.centerIn: parent; text: "未完成话题"; color: Theme.text; font.pixelSize: 16; font.bold: true }
-            AppButton {
-                anchors.right: parent.right; anchors.rightMargin: 6
-                anchors.verticalCenter: parent.verticalCenter
-                text: "✕"; implicitWidth: 30; implicitHeight: 30; btnRadius: 15
-                onClicked: topicsDialog.close()
-            }
-        }
-        contentItem: ColumnLayout {
-            spacing: 8
-            ListView {
-                id: topicsListView
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                spacing: 4
-                model: aiService.topicList()
-                delegate: RowLayout {
-                    width: topicsListView.width
-                    spacing: 8
-                    Text {
-                        Layout.fillWidth: true
-                        text: modelData
-                        color: Theme.text
-                        font.pixelSize: 12
-                        wrapMode: Text.Wrap
-                    }
+            // ---------------- page 4: 我的兴趣 ----------------
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.sp5
+                    spacing: Theme.sp3
+
                     AppButton {
-                        text: "删"
-                        implicitWidth: 34; implicitHeight: 30
-                        onClicked: {
-                            aiService.removeTopic(modelData)
-                            topicsListView.model = aiService.topicList()
+                        text: "‹ 返回"
+                        variant: "ghost"
+                        implicitWidth: 80
+                        onClicked: aiProfileDialog.showOverview()
+                    }
+                    ListView {
+                        id: interestsListView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        spacing: Theme.sp2
+                        model: aiService.interestList()
+                        delegate: RowLayout {
+                            width: interestsListView.width
+                            spacing: Theme.sp3
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData
+                                color: Theme.text
+                                font.pixelSize: Theme.fsDefault
+                                elide: Text.ElideRight
+                            }
+                            AppButton {
+                                text: "删除"
+                                variant: "ghost"
+                                implicitHeight: 30
+                                onClicked: {
+                                    aiService.removeInterest(modelData)
+                                    interestsListView.model = aiService.interestList()
+                                }
+                            }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.sp3
+                        TextField {
+                            id: interestInput
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 38
+                            color: Theme.text
+                            placeholderText: "添加一个兴趣（如 Minecraft）"
+                            placeholderTextColor: Theme.textDim
+                            background: Rectangle { color: Theme.inputBg; radius: Theme.rMd }
+                            onAccepted: addInterestBtn.clicked()
+                        }
+                        AppButton {
+                            id: addInterestBtn
+                            text: "添加"
+                            variant: "secondary"
+                            implicitHeight: 38
+                            onClicked: {
+                                aiService.addInterest(interestInput.text)
+                                interestInput.text = ""
+                                interestsListView.model = aiService.interestList()
+                            }
                         }
                     }
                 }
             }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                TextField {
-                    id: topicInput
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 36
-                    color: Theme.text
-                    placeholderText: "添加一个聊到一半的话题..."
-                    background: Rectangle { color: Theme.inputBg; radius: 8 }
+
+            // ---------------- page 5: 未完成话题 ----------------
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.sp5
+                    spacing: Theme.sp3
+
+                    AppButton {
+                        text: "‹ 返回"
+                        variant: "ghost"
+                        implicitWidth: 80
+                        onClicked: aiProfileDialog.showOverview()
+                    }
+                    ListView {
+                        id: topicsListView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        spacing: Theme.sp2
+                        model: aiService.topicList()
+                        delegate: RowLayout {
+                            width: topicsListView.width
+                            spacing: Theme.sp3
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData
+                                color: Theme.text
+                                font.pixelSize: Theme.fsDefault
+                                wrapMode: Text.Wrap
+                            }
+                            AppButton {
+                                text: "删除"
+                                variant: "ghost"
+                                implicitHeight: 30
+                                onClicked: {
+                                    aiService.removeTopic(modelData)
+                                    topicsListView.model = aiService.topicList()
+                                }
+                            }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.sp3
+                        TextField {
+                            id: topicInput
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 38
+                            color: Theme.text
+                            placeholderText: "添加一个聊到一半的话题"
+                            placeholderTextColor: Theme.textDim
+                            background: Rectangle { color: Theme.inputBg; radius: Theme.rMd }
+                            onAccepted: addTopicBtn.clicked()
+                        }
+                        AppButton {
+                            id: addTopicBtn
+                            text: "添加"
+                            variant: "secondary"
+                            implicitHeight: 38
+                            onClicked: {
+                                aiService.addTopic(topicInput.text)
+                                topicInput.text = ""
+                                topicsListView.model = aiService.topicList()
+                            }
+                        }
+                    }
                 }
-                AppButton {
-                    text: "添加"
-                    implicitHeight: 36
-                    onClicked: {
-                        aiService.addTopic(topicInput.text)
-                        topicInput.text = ""
-                        topicsListView.model = aiService.topicList()
+            }
+
+            // ---------------- page 6: 使用统计 ----------------
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.sp5
+                    spacing: Theme.sp3
+
+                    AppButton {
+                        text: "‹ 返回"
+                        variant: "ghost"
+                        implicitWidth: 80
+                        onClicked: aiProfileDialog.showOverview()
+                    }
+                    Card {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        ScrollView {
+                            anchors.fill: parent
+                            anchors.margins: Theme.sp3
+                            clip: true
+                            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                            TextArea {
+                                id: usageTextArea
+                                width: parent.width
+                                color: Theme.text
+                                font.pixelSize: Theme.fsDefault
+                                readOnly: true
+                                wrapMode: TextEdit.Wrap
+                                background: null
+                                text: aiService.usageText() + "\n\n" + aiService.uptimeText()
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    Dialog {
+    // small add-memory dialog (kept minimal on purpose)
+    DialogContainer {
         id: memoryInputDialog
-        width: 420
-        height: 220
-        modal: true
-        x: (root.width - width) / 2
-        y: (root.height - height) / 2
-        background: Rectangle {
-            color: Theme.surface
-            radius: 14
-            border.color: Theme.glassBorder
-            border.width: 1
-        }
-        header: Item {
-            height: 40
-            Text {
-                anchors.centerIn: parent
-                text: "添加记忆"
-                color: Theme.text
-                font.pixelSize: 16
-                font.bold: true
-            }
-        }
-        contentItem: ColumnLayout {
-            spacing: 10
-            Text {
-                text: "告诉 AI 一件值得记住的事（比如你的喜好、习惯）"
-                color: Theme.textDim
-                font.pixelSize: 12
-                wrapMode: Text.Wrap
-                Layout.fillWidth: true
-            }
+        dialogTitle: "添加记忆"
+        dialogSubtitle: "告诉 AI 一件值得记住的事"
+        dialogWidth: 460
+        dialogHeight: 300
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Theme.sp5
+            spacing: Theme.sp3
+
             TextArea {
                 id: memoryInput
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: Theme.text
-                placeholderText: "比如：我喜欢喝奶茶，讨厌下雨天..."
+                placeholderText: "比如：我喜欢喝奶茶，讨厌下雨天…"
                 placeholderTextColor: Theme.textDim
                 wrapMode: TextEdit.Wrap
-                background: Rectangle { color: Theme.inputBg; radius: 8 }
+                background: Rectangle { color: Theme.inputBg; radius: Theme.rMd }
             }
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Theme.sp3
                 AppButton {
                     text: "记住"
+                    variant: "primary"
                     Layout.fillWidth: true
                     onClicked: {
                         aiService.addMemoryNote(memoryInput.text)
@@ -1269,6 +1076,7 @@ ApplicationWindow {
                 }
                 AppButton {
                     text: "取消"
+                    variant: "secondary"
                     Layout.fillWidth: true
                     onClicked: memoryInputDialog.close()
                 }
@@ -1339,7 +1147,10 @@ ApplicationWindow {
         root.refreshContacts()
         root.aiGreeting = aiService.greeting()
         if (aiService.shouldGreetToday()) {
+            // show once on the island AND persist into chat history so the
+            // greeting reads like a real first message from the AI
             islandToast.show(root.aiGreeting, 20000)
+            chatPage.insertAiMessage(root.aiGreeting)
             aiService.generateGreeting()
             aiService.markGreeted()
         }
@@ -1376,8 +1187,9 @@ ApplicationWindow {
             root.bumpUnread()
         }
         function onGreetingReady(text) {
+            // async regeneration: keep the new text for future sessions,
+            // but do NOT re-show / re-insert (already done once at startup)
             root.aiGreeting = text
-            islandToast.show(text, 20000)
         }
         function onProfileChanged() {
             root.refreshProfile()

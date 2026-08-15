@@ -5,6 +5,7 @@
 #include <QJsonArray>
 class QTimer;
 class ContextManager;
+struct ConversationState;
 
 // AI companion card: chat with DeepSeek + long-term memory.
 // Memory: JSON file storing session times, novel-edit counts, sleep habits.
@@ -167,4 +168,9 @@ private:
     // companion context: short-term fact cache + correction ledger
     ContextManager *m_ctx = nullptr;
     QString m_lastAiReply;            // last AI reply (for correction detection)
+
+    // short-term conversation state (current session only, never persisted)
+    ConversationState *m_convo = nullptr;
+    void updateConversationState(const QString &userText, const QString &aiReply, const QString &emotion);
+    QString conversationStateBlock() const;  // prompt-ready state section
 };

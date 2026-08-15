@@ -10,13 +10,17 @@ QtObject {
     readonly property color bg:          "#141414"
     readonly property color sidebar:     "#0D0D0D"
     readonly property color surface:     "#1E1E1E"
+    readonly property color card:        "#1E1E1E"
     readonly property color inputBg:     "#262626"
-    readonly property color hoverBg:     "#2E2E2E"
 
     // ---- accents ----
     readonly property color accent:      "#3A3F4A"
     readonly property color accentHover: "#4A5160"
     readonly property color selected:    "#33383F"
+
+    // hover highlight — neutral grey tint (no blue)
+    readonly property color hoverBg:     "#252525"
+    readonly property color hoverBgStrong: "#2E2E2E"
 
     // ---- text ----
     readonly property color text:        "#F0F0F0"
@@ -40,7 +44,8 @@ QtObject {
     readonly property color glassBorder: Qt.rgba(255,255,255,0.08)
 
     // ---- interaction / focus (a11y: visible focus ring on keyboard nav) ----
-    readonly property color focusRing:   "#8FA4C8"
+    // neutral grey — never blue
+    readonly property color focusRing:   Qt.rgba(1,1,1,0.45)
 
     // ================= SPACING (8px grid) =================
     readonly property int sp1: 4
@@ -60,11 +65,19 @@ QtObject {
     readonly property int fsPage:    20
     readonly property int fsHero:    28
 
+    // typography hierarchy (semantic usage)
+    readonly property int typeH1: fsHero      // page hero / big numbers
+    readonly property int typeH2: fsPage      // page title
+    readonly property int typeH3: fsTitle     // card title
+    readonly property int typeBody: fsDefault // body / buttons
+    readonly property int typeMeta: fsSmall   // secondary info
+    readonly property int typeCaption: fsCaption // captions / badges
+
     // ================= RADIUS =================
     readonly property int rSmall: 6
     readonly property int rMd:    8
     readonly property int rLg:    10
-    readonly property int rXl:    12
+    readonly property int rXl:    14
     readonly property int rFull:  999
 
     // ================= MOTION (ease-out) =================

@@ -1,37 +1,54 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
-// Unified frosted-glass button: translucent dark fill + soft border + hover/press tint.
-// a11y: keyboard focus shows a visible focus ring; disabled state dims and blocks.
+// App button with explicit variants (design-system):
+//   variant "primary"   — solid accent, main action
+//   variant "secondary" — glass fill, common action
+//   variant "ghost"     — transparent, low emphasis
+// States: default / hover / pressed / disabled / focus (a11y ring)
 Button {
     id: root
 
-    property color glassColor: Qt.rgba(255,255,255,0.08)
-    property color glassHover: Qt.rgba(255,255,255,0.16)
-    property color glassPress: Qt.rgba(255,255,255,0.22)
-    property color borderColor: Qt.rgba(255,255,255,0.12)
-    property color disabledColor: Qt.rgba(255,255,255,0.04)
+    property string variant: "secondary"   // primary | secondary | ghost
     property int btnRadius: Theme.rMd
-    property int btnHeight: 40
+    property int btnHeight: 38
 
     implicitHeight: btnHeight
     font.pixelSize: Theme.fsDefault
     font.family: "Microsoft YaHei UI"
     focusPolicy: Qt.StrongFocus
 
+    // legacy overrides (kept for existing call sites; ignored when unset)
+    property color glassColor: Qt.rgba(0,0,0,0)      // sentinel: unset
+    property color glassHover: Qt.rgba(0,0,0,0)
+    property color glassPress: Qt.rgba(0,0,0,0)
+    property color borderColor: Qt.rgba(0,0,0,0)
+
+    property color vFill: variant === "primary" ? Theme.accent
+                        : variant === "ghost" ? "transparent"
+                        : (glassColor.a > 0 ? glassColor : Qt.rgba(1,1,1,0.08))
+    property color vFillHover: variant === "primary" ? Theme.accentHover
+                             : variant === "ghost" ? Qt.rgba(1,1,1,0.05)
+                             : (glassHover.a > 0 ? glassHover : Qt.rgba(1,1,1,0.14))
+    property color vFillPress: variant === "primary" ? Theme.accentHover
+                             : variant === "ghost" ? Qt.rgba(1,1,1,0.08)
+                             : (glassPress.a > 0 ? glassPress : Qt.rgba(1,1,1,0.20))
+    property color vBorder: variant === "primary" ? "transparent"
+                          : variant === "ghost" ? "transparent"
+                          : (borderColor.a > 0 ? borderColor : Qt.rgba(1,1,1,0.12))
+    property color vText: variant === "primary" ? "#FFFFFF"
+                        : root.enabled ? Theme.text : Theme.textDim
+
     background: Rectangle {
         radius: btnRadius
-        color: !root.enabled ? disabledColor
-             : root.down ? glassPress
-             : root.hovered ? glassHover
-             : glassColor
-        border.color: root.hovered && root.enabled ? Qt.lighter(borderColor, 1.4) : borderColor
+        color: !root.enabled ? Qt.rgba(1,1,1,0.03)
+             : root.down ? root.vFillPress
+             : root.hovered ? root.vFillHover
+             : root.vFill
+        border.color: root.enabled ? root.vBorder : Qt.rgba(1,1,1,0.06)
         border.width: 1
         Behavior on color { ColorAnimation { duration: Theme.durFast } }
-        Behavior on border.color { ColorAnimation { duration: Theme.durFast } }
 
-        // visible focus ring for keyboard navigation (a11y)
         Rectangle {
             anchors.fill: parent
             radius: btnRadius
@@ -46,8 +63,9 @@ Button {
     contentItem: Text {
         text: root.text
         font: root.font
-        color: root.enabled ? "#FFFFFF" : "#777777"
+        color: root.vText
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
+        opacity: root.enabled ? 1 : 0.5
     }
 }

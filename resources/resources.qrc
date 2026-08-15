@@ -9,6 +9,18 @@
         <file>../qml/Components/ReportDialog.qml</file>
         <file>../qml/Components/Theme.qml</file>
         <file>../qml/Components/PageHeader.qml</file>
+        <file>../qml/Components/Avatar.qml</file>
+        <file>../qml/Components/Card.qml</file>
+        <file>../qml/Components/NavItem.qml</file>
+        <file>../qml/Components/SettingsItem.qml</file>
+        <file>../qml/Components/SettingCard.qml</file>
+        <file>../qml/Components/MessageBubble.qml</file>
+        <file>../qml/Components/DialogContainer.qml</file>
+        <file>../qml/Components/ProfileHeader.qml</file>
+        <file>../qml/Components/SectionLabel.qml</file>
+        <file>../qml/Components/StatusBadge.qml</file>
+        <file>../qml/Components/ResultPanel.qml</file>
+        <file>../qml/Components/IconButton.qml</file>
         <file>../qml/Components/qmldir</file>
         <file>../qml/Pages/NetworkPage.qml</file>
         <file>../qml/Pages/SystemPage.qml</file>

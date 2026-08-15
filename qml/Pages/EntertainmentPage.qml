@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "../Components"
 
+// Entertainment: companion-focused — today's fortune, fun tools, mood journal.
 Page {
     id: root
     padding: 0
@@ -22,232 +23,325 @@ Page {
         return Math.floor((x - Math.floor(x)) * 100) + 1
     }
 
+    // fixed header + scrollable body (same layout as Settings page)
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 24
-        spacing: 16
+        anchors.margins: Theme.sp5
+        spacing: Theme.sp4
 
         PageHeader {
             title: "娱乐 · UwU"
-            subtitle: "今日运势、抽签和一点小乐趣"
+            subtitle: "陪你看今天的运势，记下小心情"
         }
-        GridLayout {
-            columns: 3
-            columnSpacing: 14
-            rowSpacing: 14
+
+        ScrollView {
+            id: scroll
             Layout.fillWidth: true
-            Layout.alignment: Qt.AlignLeft | Qt.AlignTop
-            Layout.fillHeight: false
+            Layout.fillHeight: true
+            clip: true
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-            ActionCard {
-                Layout.fillWidth: true
-                title: "今日幸运值"
-                desc: "看看今天的欧气"
-                onClicked: {
-                    var v = root.luckyValue()
-                    var verdict = ""
-                    if (v >= 90) verdict = "欧气爆棚!! 去买彩票吧 Ovo"
-                    else if (v >= 70) verdict = "今天运气不错~"
-                    else if (v >= 40) verdict = "平平淡淡才是真"
-                    else if (v >= 20) verdict = "有点小霉运，注意脚下 QwQ"
-                    else verdict = "低调点……别立flag"
-                    root.result = "今日幸运值：" + v + "/100\n" + verdict
-                }
-            }
-            ActionCard {
-                Layout.fillWidth: true
-                title: "今日宜忌"
-                desc: "泉此方钦定"
-                onClicked: {
-                    var yi = ["出行","会友","交易","祈福","求财","学习","运动","表白","搬家","装修"]
-                    var ji = ["熬夜","借贷","争吵","远行","动土","发誓","冒险","拖延","暴饮暴食","冲动消费"]
-                    root.result = "今日宜：" + yi[root.randomInt(0, yi.length-1)] + "\n今日忌：" + ji[root.randomInt(0, ji.length-1)]
-                }
-            }
-            ActionCard {
-                Layout.fillWidth: true
-                title: "抽签"
-                desc: "一签定吉凶"
-                onClicked: {
-                    var signs = ["大吉","中吉","小吉","吉","末吉","凶","大凶"]
-                    var tips = ["心想事成 Ovo","运气不错~","小有福气","平平顺顺","稍安勿躁","宜低调 QwQ","宜躺平"]
-                    var i = root.randomInt(0, signs.length-1)
-                    root.result = "抽签结果：" + signs[i] + "\n" + tips[i]
-                }
-            }
-            ActionCard {
-                Layout.fillWidth: true
-                title: "抽卡模拟器"
-                desc: "SSR 保佑 Ovo"
-                onClicked: {
-                    var roll = root.randomInt(1, 1000)
-                    var rarity = ""
-                    if (roll <= 6) rarity = "SSR ★★★★★"
-                    else if (roll <= 46) rarity = "SR ★★★★"
-                    else if (roll <= 196) rarity = "R ★★★"
-                    else rarity = "N ★★"
-                    root.result = "抽卡结果：" + rarity
-                    statsService.record("gacha", rarity)
-                }
-            }
-            ActionCard {
-                Layout.fillWidth: true
-                title: "播放音乐"
-                desc: "这么可爱真是抱歉.mp3"
-                onClicked: appCore.showToast("音乐模块（后续版本）")
-            }
-            ActionCard {
-                Layout.fillWidth: true
-                title: "心情日记"
-                desc: "选一个心情记下来"
-                onClicked: moodDialog.open()
-            }
-            ActionCard {
-                Layout.fillWidth: true
-                title: "整蛊模式"
-                desc: root.prankOn ? "运行中 ●" : "随机弹「该休息了」"
-                onClicked: {
-                    root.prankOn = !root.prankOn
-                    if (root.prankOn) prankTimer.start()
-                    else prankTimer.stop()
-                    appCore.showToast(root.prankOn ? "整蛊模式已开启~" : "整蛊模式已关闭~")
-                }
-            }
-            ActionCard {
-                Layout.fillWidth: true
-                title: "严肃观看"
-                desc: "开梯子前往 pixiv"
-                onClicked: {
-                    proxyService.launchAny()
-                    Qt.openUrlExternally("https://www.pixiv.net/")
-                }
-            }
-        }
+            ColumnLayout {
+                width: scroll.availableWidth
+                spacing: Theme.sp4
 
-        Dialog {
-            id: moodDialog
-            width: 380
-            modal: true
-            padding: 16
-            anchors.centerIn: Overlay.overlay
-            background: Rectangle {
-                color: "#2A2333"
-                radius: 16
-                border.color: Qt.rgba(255,180,220,0.25)
-                border.width: 1
-            }
-            header: Item {
-                height: 40
-                Text {
-                    anchors.centerIn: parent
-                    text: "今天的心情是……？"
-                    color: "#FFD3E8"
-                    font.pixelSize: 16
-                    font.bold: true
+            // ================= 分区① 今日状态 =================
+            SectionLabel { text: "今日状态" }
+            GridLayout {
+                Layout.leftMargin: Theme.sp1
+                Layout.rightMargin: Theme.sp1
+                Layout.fillWidth: true
+                columns: 3
+                columnSpacing: Theme.sp5
+                rowSpacing: Theme.sp5
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.sp4
+                        anchors.rightMargin: Theme.sp4
+                        spacing: 2
+                        Text { text: "今日幸运值"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                        Text { text: "看看今天的欧气"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    }
+                    onClicked: {
+                        var v = root.luckyValue()
+                        var verdict = ""
+                        if (v >= 90) verdict = "欧气爆棚!! 去买彩票吧 Ovo"
+                        else if (v >= 70) verdict = "今天运气不错~"
+                        else if (v >= 40) verdict = "平平淡淡才是真"
+                        else if (v >= 20) verdict = "有点小霉运，注意脚下 QwQ"
+                        else verdict = "低调点……别立flag"
+                        root.result = "今日幸运值：" + v + "/100\n" + verdict
+                    }
                 }
-                // X close button
-                AppButton {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 28; height: 28
-                    text: "✕"
-                    implicitHeight: 28
-                    glassColor: "transparent"
-                    glassHover: Theme.glassHover
-                    glassPress: Theme.glassPress
-                    font.pixelSize: 14
-                    onClicked: moodDialog.close()
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.sp4
+                        anchors.rightMargin: Theme.sp4
+                        spacing: 2
+                        Text { text: "今日宜忌"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                        Text { text: "泉此方钦定"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    }
+                    onClicked: {
+                        var yi = ["出行","会友","交易","祈福","求财","学习","运动","表白","搬家","装修"]
+                        var ji = ["熬夜","借贷","争吵","远行","动土","发誓","冒险","拖延","暴饮暴食","冲动消费"]
+                        root.result = "今日宜：" + yi[root.randomInt(0, yi.length-1)] + "\n今日忌：" + ji[root.randomInt(0, ji.length-1)]
+                    }
+                }
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.sp4
+                        anchors.rightMargin: Theme.sp4
+                        spacing: 2
+                        Text { text: "抽签"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                        Text { text: "一签定吉凶"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    }
+                    onClicked: {
+                        var signs = ["大吉","中吉","小吉","吉","末吉","凶","大凶"]
+                        var tips = ["心想事成 Ovo","运气不错~","小有福气","平平顺顺","稍安勿躁","宜低调 QwQ","宜躺平"]
+                        var i = root.randomInt(0, signs.length-1)
+                        root.result = "抽签结果：" + signs[i] + "\n" + tips[i]
+                    }
                 }
             }
-            contentItem: ScrollView {
-                width: parent.width
-                height: 320
-                clip: true
-                Column {
-                    width: parent.width
-                    spacing: 8
-                    Repeater {
-                        model: moodService.moodOptions()
-                        delegate: Rectangle {
-                            width: parent.width
-                            height: 44
-                            radius: 22
-                            color: mouse.hovered ? Qt.rgba(255,180,210,0.25) : Qt.rgba(255,180,210,0.10)
-                            border.color: Qt.rgba(255,200,225,0.25)
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: "#FFE4F0"
-                                font.pixelSize: 14
-                                width: parent.width - 24
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.Wrap
-                            }
-                            MouseArea {
-                                id: mouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    moodService.recordMood(modelData)
-                                statsService.record("mood", modelData)
-                                    root.result = "心情已记下~\n" + modelData
-                                    moodDialog.close()
-                                    appCore.showToast("心情已记下~ " + modelData)
-                                }
-                            }
+
+            // 今日状态结果（就近显示）
+            ResultPanel {
+                Layout.fillWidth: true
+                title: "今日结果"
+                emptyHint: "点上面的卡片，看看今天运势"
+                text: root.result
+            }
+
+            // ================= 分区② 趣味功能 =================
+            SectionLabel { text: "趣味功能" }
+            GridLayout {
+                Layout.leftMargin: Theme.sp1
+                Layout.rightMargin: Theme.sp1
+                Layout.fillWidth: true
+                columns: 3
+                columnSpacing: Theme.sp5
+                rowSpacing: Theme.sp5
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.sp4
+                        anchors.rightMargin: Theme.sp4
+                        spacing: 2
+                        Text { text: "抽卡模拟器"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                        Text { text: "SSR 保佑 Ovo"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    }
+                    onClicked: {
+                        var roll = root.randomInt(1, 1000)
+                        var rarity = ""
+                        if (roll <= 6) rarity = "SSR ★★★★★"
+                        else if (roll <= 46) rarity = "SR ★★★★"
+                        else if (roll <= 196) rarity = "R ★★★"
+                        else rarity = "N ★★"
+                        root.result = "抽卡结果：" + rarity
+                        statsService.record("gacha", rarity)
+                    }
+                }
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.sp4
+                        anchors.rightMargin: Theme.sp4
+                        spacing: 2
+                        Text { text: "整蛊模式"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                        Text {
+                            text: root.prankOn ? "运行中，随机弹「该休息了」" : "随机弹「该休息了」"
+                            color: root.prankOn ? Theme.ok : Theme.textDim
+                            font.pixelSize: Theme.fsSmall
                         }
                     }
-                    // history viewer
-                    Rectangle {
+                    onClicked: {
+                        root.prankOn = !root.prankOn
+                        if (root.prankOn) prankTimer.start()
+                        else prankTimer.stop()
+                        appCore.showToast(root.prankOn ? "整蛊模式已开启~" : "整蛊模式已关闭~")
+                    }
+                }
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    enabled: false
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.sp4
+                        anchors.rightMargin: Theme.sp4
+                        spacing: 2
+                        Text { text: "播放音乐"; color: Theme.textDim; font.pixelSize: Theme.fsDefault; font.bold: true }
+                        Text { text: "即将推出"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    }
+                }
+            }
+
+            // ================= 分区③ 心情记录 =================
+            SectionLabel { text: "心情记录" }
+            GridLayout {
+                Layout.leftMargin: Theme.sp1
+                Layout.rightMargin: Theme.sp1
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Theme.sp5
+                rowSpacing: Theme.sp5
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.sp4
+                        anchors.rightMargin: Theme.sp4
+                        spacing: 2
+                        Text { text: "记录今天的心情"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                        Text { text: "选一个心情记下来"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    }
+                    onClicked: moodDialog.open()
+                }
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: Theme.sp4
+                        anchors.rightMargin: Theme.sp4
+                        spacing: 2
+                        Text { text: "心情历史"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                        Text { text: "回看最近的心情"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    }
+                    onClicked: appCore.showToast(moodService.history())
+                }
+            }
+
+            Item { Layout.preferredHeight: Theme.sp6 }
+            }
+        }
+    }
+
+    // ================= mood dialog (kept as-is) =================
+    Dialog {
+        id: moodDialog
+        width: 380
+        modal: true
+        padding: 16
+        anchors.centerIn: Overlay.overlay
+        background: Rectangle {
+            color: Theme.surface
+            radius: 16
+            border.color: Qt.rgba(255,180,220,0.25)
+            border.width: 1
+        }
+        header: Item {
+            height: 40
+            Text {
+                anchors.centerIn: parent
+                text: "今天的心情是……？"
+                color: Theme.text
+                font.pixelSize: Theme.fsTitle
+                font.bold: true
+            }
+            AppButton {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: 28; height: 28
+                text: "✕"
+                implicitHeight: 28
+                glassColor: "transparent"
+                glassHover: Theme.glassHover
+                glassPress: Theme.glassPress
+                font.pixelSize: 14
+                onClicked: moodDialog.close()
+            }
+        }
+        contentItem: ScrollView {
+            width: parent.width
+            height: 320
+            clip: true
+            Column {
+                width: parent.width
+                spacing: 8
+                Repeater {
+                    model: moodService.moodOptions()
+                    delegate: Rectangle {
                         width: parent.width
-                        height: 38
-                        radius: 19
-                        color: Qt.rgba(255,220,240,0.08)
-                        border.color: Qt.rgba(255,200,225,0.20)
+                        height: 44
+                        radius: 22
+                        color: mouse.hovered ? Qt.rgba(255,180,210,0.25) : Qt.rgba(255,180,210,0.10)
+                        border.color: Qt.rgba(255,200,225,0.25)
                         border.width: 1
                         Text {
                             anchors.centerIn: parent
-                            text: "📖 查看心情历史"
-                            color: "#FFD3E8"
-                            font.pixelSize: 13
+                            text: modelData
+                            color: Theme.text
+                            font.pixelSize: Theme.fsDefault
+                            width: parent.width - 24
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
                         }
                         MouseArea {
+                            id: mouse
                             anchors.fill: parent
+                            hoverEnabled: true
                             onClicked: {
-                                appCore.showToast(moodService.history())
+                                moodService.recordMood(modelData)
+                                statsService.record("mood", modelData)
+                                root.result = "心情已记下~\n" + modelData
+                                moodDialog.close()
+                                appCore.showToast("心情已记下~ " + modelData)
                             }
                         }
                     }
                 }
             }
         }
+    }
 
-        Timer {
-            id: prankTimer
-            interval: 60000
-            repeat: true
-            onTriggered: {
-                if (root.prankOn) appCore.showToast("泉此方提示你该休息了~")
-            }
+    Timer {
+        id: prankTimer
+        interval: 60000
+        repeat: true
+        onTriggered: {
+            if (root.prankOn) appCore.showToast("泉此方提示你该休息了~")
         }
-
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 90
-            color: Theme.surface
-            radius: 10
-            visible: root.result.length > 0
-            Text {
-                anchors.fill: parent
-                anchors.margins: 14
-                color: "#E6EEF5"
-                font.pixelSize: 15
-                wrapMode: Text.Wrap
-                text: root.result
-            }
-        }
-
-        Item { Layout.fillHeight: true }
     }
 }

@@ -3,7 +3,9 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "../Components"
 
+// System tools: grouped sections (cleanup / analysis / startup).
 Page {
+    id: page
     padding: 0
     background: Rectangle { color: Theme.bg }
 
@@ -16,46 +18,224 @@ Page {
         }
     }
 
+    // fixed header + scrollable body (same layout as Settings page)
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 24
-        spacing: 16
+        anchors.margins: Theme.sp5
+        spacing: Theme.sp4
 
         PageHeader {
             title: "系统工具"
-            subtitle: "清理垃圾与内存，保持系统清爽"
+            subtitle: "帮你把电脑收拾得干干净净"
         }
 
-        GridLayout {
-            columns: 3
-            columnSpacing: 14
-            rowSpacing: 14
+        ScrollView {
+            id: scroll
             Layout.fillWidth: true
-            Layout.alignment: Qt.AlignLeft | Qt.AlignTop
-            Layout.fillHeight: false
+            Layout.fillHeight: true
+            clip: true
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-            ActionCard {
-                title: "清理垃圾"
-                desc: "临时文件 / 缓存 / 崩溃转储"
+            ColumnLayout {
+                width: scroll.availableWidth
+                spacing: Theme.sp4
+
+            // ================= 分区① 系统清理 =================
+            SectionLabel { text: "系统清理" }
+            GridLayout {
+                Layout.leftMargin: Theme.sp1
+                Layout.rightMargin: Theme.sp1
                 Layout.fillWidth: true
-                onClicked: {
-                    appCore.showToast("泉此方开始扫垃圾了...")
-                    sysService.cleanJunkAsync()
+                columns: 2
+                columnSpacing: Theme.sp5
+                rowSpacing: Theme.sp5
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: Theme.sp4
+                        spacing: Theme.sp3
+                        Rectangle {
+                            width: 40; height: 40; radius: Theme.rLg
+                            color: Qt.rgba(1,1,1,0.06)
+                            border.color: Theme.glassBorder
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "清"
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fsDefault
+                                font.bold: true
+                            }
+                        }
+                        Column {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text { text: "清理垃圾"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                            Text { text: "临时文件 / 缓存 / 崩溃转储"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                        }
+                        Text { text: "›"; color: Theme.textDim; font.pixelSize: Theme.fsDefault }
+                    }
+                    onClicked: {
+                        appCore.showToast("泉此方开始扫垃圾了...")
+                        sysService.cleanJunkAsync()
+                    }
+                }
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: Theme.sp4
+                        spacing: Theme.sp3
+                        Rectangle {
+                            width: 40; height: 40; radius: Theme.rLg
+                            color: Qt.rgba(1,1,1,0.06)
+                            border.color: Theme.glassBorder
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "内"
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fsDefault
+                                font.bold: true
+                            }
+                        }
+                        Column {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text { text: "清理内存"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                            Text { text: "释放进程内存"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                        }
+                        Text { text: "›"; color: Theme.textDim; font.pixelSize: Theme.fsDefault }
+                    }
+                    onClicked: {
+                        appCore.showToast(sysService.cleanMemory())
+                        statsService.record("mem", "1")
+                    }
                 }
             }
-            ActionCard {
-                title: "清理内存"
-                desc: "释放进程内存"
+
+            // ================= 分区② 分析与报告 =================
+            SectionLabel { text: "分析与报告" }
+            GridLayout {
+                Layout.leftMargin: Theme.sp1
+                Layout.rightMargin: Theme.sp1
                 Layout.fillWidth: true
-                onClicked: {
-                    appCore.showToast(sysService.cleanMemory())
-                    statsService.record("mem", "1")
+                columns: 2
+                columnSpacing: Theme.sp5
+                rowSpacing: Theme.sp5
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: Theme.sp4
+                        spacing: Theme.sp3
+                        Rectangle {
+                            width: 40; height: 40; radius: Theme.rLg
+                            color: Qt.rgba(1,1,1,0.06)
+                            border.color: Theme.glassBorder
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "报"
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fsDefault
+                                font.bold: true
+                            }
+                        }
+                        Column {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text { text: "使用报告"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                            Text { text: "抽卡 / 心情 / 清理统计"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                        }
+                        Text { text: "›"; color: Theme.textDim; font.pixelSize: Theme.fsDefault }
+                    }
+                    onClicked: {
+                        reportDialog.tab = 0
+                        reportDialog.loadData()
+                        reportDialog.open()
+                    }
+                }
+
+                Card {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 84
+                    clickable: true
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: Theme.sp4
+                        spacing: Theme.sp3
+                        Rectangle {
+                            width: 40; height: 40; radius: Theme.rLg
+                            color: Qt.rgba(1,1,1,0.06)
+                            border.color: Theme.glassBorder
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "扫"
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fsDefault
+                                font.bold: true
+                            }
+                        }
+                        Column {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text { text: "大文件扫描"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                            Text { text: "找出 C 盘的大文件"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                        }
+                        Text { text: "›"; color: Theme.textDim; font.pixelSize: Theme.fsDefault }
+                    }
+                    onClicked: {
+                        toolResult.text = sysService.scanLargeFiles()
+                        toolDialog.title = "大文件扫描"
+                        toolDialog.open()
+                    }
                 }
             }
-            ActionCard {
-                title: "开机自启管理"
-                desc: "查看 / 禁用启动项"
+
+            // ================= 分区③ 启动管理 =================
+            SectionLabel { text: "启动管理" }
+            Card {
                 Layout.fillWidth: true
+                Layout.preferredHeight: 84
+                clickable: true
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.sp4
+                    spacing: Theme.sp3
+                    Rectangle {
+                        width: 40; height: 40; radius: Theme.rLg
+                        color: Qt.rgba(1,1,1,0.06)
+                        border.color: Theme.glassBorder
+                        border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: "启"
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fsDefault
+                            font.bold: true
+                        }
+                    }
+                    Column {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Text { text: "开机自启管理"; color: Theme.text; font.pixelSize: Theme.fsDefault; font.bold: true }
+                        Text { text: "查看 / 禁用启动项"; color: Theme.textDim; font.pixelSize: Theme.fsSmall }
+                    }
+                    Text { text: "›"; color: Theme.textDim; font.pixelSize: Theme.fsDefault }
+                }
                 onClicked: {
                     startupModel.clear()
                     var items = sysService.startupItemList()
@@ -68,28 +248,10 @@ Page {
                     startupDialog.open()
                 }
             }
-            ActionCard {
-                title: "使用报告"
-                desc: "抽卡 / 心情 / 清理统计"
-                Layout.fillWidth: true
-                onClicked: {
-                    reportDialog.tab = 0
-                    reportDialog.loadData()
-                    reportDialog.open()
-                }
-            }
-            ActionCard {
-                title: "大文件扫描"
-                desc: "找出 C 盘的大文件"
-                Layout.fillWidth: true
-                onClicked: {
-                    toolResult.text = sysService.scanLargeFiles()
-                    toolDialog.title = "大文件扫描"
-                    toolDialog.open()
-                }
+
+            Item { Layout.preferredHeight: Theme.sp6 }
             }
         }
-        Item { Layout.fillHeight: true }
     }
 
     Dialog {

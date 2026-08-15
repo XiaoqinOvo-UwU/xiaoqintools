@@ -444,6 +444,25 @@ Rectangle {
         pumpReplies()
     }
 
+    // direct AI message insert (e.g. morning greeting): shows immediately
+    // (no typing queue) AND persists to the chat DB so it appears in history
+    function insertAiMessage(text) {
+        if (!text || text.trim().length === 0) return
+        msgModel.append({ "isAi": true, "msg": text })
+        Qt.callLater(function() { msgView.positionViewAtEnd() })
+        try {
+            var cid = chatPage.currentContactId.length > 0 ? chatPage.currentContactId : contactService.currentId()
+            if (cid.length > 0) {
+                var db = chatDb()
+                db.transaction(function(tx) {
+                    tx.executeSql("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, contact TEXT, isAi INTEGER, msg TEXT)")
+                    tx.executeSql("INSERT INTO messages (contact, isAi, msg) VALUES (?,1,?)", [cid, text])
+                })
+                chatPage.messageSaved(cid, true, text)
+            }
+        } catch (e) { }
+    }
+
     property var replyQueue: []
     property bool replyBusy: false
 

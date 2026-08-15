@@ -4,6 +4,7 @@
 #include "ContextManager.h"
 #include "FactFilter.h"
 #include "ResponseValidator.h"
+#include "ConversationState.h"
 
 #include <QDir>
 #include <QFile>
@@ -36,6 +37,7 @@ static QJsonObject readRelationship();
 AiService::AiService(QObject *parent)
     : QObject(parent)
     , m_ctx(new ContextManager)
+    , m_convo(new ConversationState)
 {
     ensureMemory();
 }
@@ -586,8 +588,10 @@ void AiService::idleChat()
             + (sysFacts.isEmpty() ? QString("- （用户关闭了状态感知，或当前无特殊状态）") : sysFacts.join("\n")) + "\n"
             + "【推荐话题】（按评分排序，选分数最高且合适的一个自然提起）\n"
             + (topTopics.isEmpty() ? QString("- 普通陪伴（不用涉及具体事情）") : topTopics.join("\n")) + "\n"
-            + "【事实纪律】只可说上面[已验证事实]里的内容；没有任何数据时禁止'你又在打游戏''你是不是在玩'这类猜测。"
+            + "【会话纪律】只可说上面[已验证事实]里的内容；没有任何数据时禁止'你又在打游戏''你是不是在玩'这类猜测。"
               "宁可聊推荐话题，也不猜测用户行为。\n"
+            + "【当前会话状态】" + conversationStateBlock() + "\n"
+            + "如果存在未解决的情绪事件，优先延续情绪话题，禁止切换成喝水/睡觉/健康提醒。\n"
             + "【减少固定模板】禁止'喝水/休息/吃饭'式查岗关心，按推荐话题自然延续。\n"
             + "【回复格式】只输出对话内容，禁止（动作）/*动作*//旁白，25字以内一句话。\n"
             + "你的当前状态：" + aiState + "\n你可以参考记忆：\n" + mem
@@ -597,9 +601,83 @@ void AiService::idleChat()
     watcher->setFuture(future);
 }
 
-// ---- companion context API (facts / corrections / topics) ----
-void AiService::notifyUserCorrection()
+// ---- short-term conversation state (never persisted) ----
+QString AiService::conversationStateBlock() const
 {
+    return m_convo->summary().isEmpty() ? QString("（新会话，无特殊状态）") : m_convo->summary();
+}
+
+void AiService::updateConversationState(const QString &userText, const QString &aiReply, const QString &emotion)
+{
+    const QString t = userText.trimmed();
+    if (t.isEmpty()) return;
+
+    // 1) topic: derive from the user message (short, meaningful)
+    {
+        QString topic = t.left(24);
+        topic.remove(QRegularExpression("^(为什么|请问|那个|嗯|啊|哦|ovo|Ovo|ovo )"));
+        m_convo->topic = topic;
+    }
+
+    // 2) user emotion (strongest signal wins; reuse the text-based detector)
+    m_convo->userEmotion = emotion.isEmpty() ? inferUserEmotion(t) : emotion;
+
+    // 3) unresolved emotional issue detection — these MUST NOT be overridden
+    //    by generic reminders in the next turn
+    static const struct { const char *kw; const char *issue; } issues[] = {
+        { "为什么", "用户表达了不被理解的委屈" },
+        { "不问我", "用户感到被忽视，需要确认关系" },
+        { "不重要", "用户怀疑自己是否重要，需要关系确认" },
+        { "是不是我", "用户自我怀疑" },
+        { "委屈", "用户感到委屈" },
+        { "难过", "用户情绪低落" },
+        { "伤心", "用户伤心" },
+        { "孤独", "用户感到孤独" },
+        { "寂寞", "用户感到寂寞" },
+        { "压力", "用户压力大" },
+        { "焦虑", "用户焦虑" },
+        { "崩溃", "用户情绪崩溃" },
+        { "想哭", "用户想哭" },
+        { "想被陪伴", "用户想被陪伴" },
+        { "陪陪我", "用户寻求陪伴" },
+        { "抱抱", "用户寻求安慰" },
+    };
+    bool emotionIssue = false;
+    for (const auto &it : issues) {
+        if (t.contains(it.kw)) {
+            m_convo->unresolvedIssue = QString::fromUtf8(it.issue);
+            emotionIssue = true;
+            break;
+        }
+    }
+    // 4) resolve: user signals they are OK now
+    static const QStringList resolveKws = { "没事了", "好了", "我没事", "想开了", "不难过", "笑了", "哈哈" };
+    for (const QString &kw : resolveKws) {
+        if (t.contains(kw)) {
+            m_convo->unresolvedIssue.clear();
+            emotionIssue = false;
+            break;
+        }
+    }
+    // 5) relationship mode + intent
+    if (emotionIssue || !m_convo->unresolvedIssue.isEmpty()) {
+        m_convo->relationshipMode = "comfort";
+        m_convo->assistantIntent = "安慰并确认关系，先接住情绪";
+    } else if (m_convo->userEmotion == "happy") {
+        m_convo->relationshipMode = "casual";
+        m_convo->assistantIntent = "陪ta开心，延续话题";
+    } else if (m_convo->userEmotion == "tired") {
+        m_convo->relationshipMode = "guidance";
+        m_convo->assistantIntent = "温和关心，简短不啰嗦";
+    } else {
+        m_convo->relationshipMode = "neutral";
+        m_convo->assistantIntent = "自然延续对话";
+    }
+    m_convo->lastUpdate = QDateTime::currentDateTime();
+}
+
+// ---- companion context API (facts / corrections / topics) ----
+void AiService::notifyUserCorrection(){
     // UI hint hook: latest AI claim was wrong — reject the most recent
     // user-behavior fact so it never resurfaces as truth
     QList<Fact> uf = m_ctx->factsBySource(FactSource::UserMessage);
@@ -871,18 +949,17 @@ void AiService::clearMemory()
 void AiService::trackChatTurn(const QString &userText, const QString &aiReply)
 {
     if (userText.isEmpty()) return;
-    // keep the last 10 turns in the buffer (short texts only)
+    // keep the last 12 turns in the buffer (short texts only)
     QString us = userText.left(200);
     QString as = aiReply.left(200);
     QString uLine = "用户: " + us;
-    if (m_chatBuffer.isEmpty() || m_chatBuffer.last() != uLine)
-        m_chatBuffer.append(uLine);
+    m_chatBuffer.append(uLine);
     if (!as.isEmpty()) {
         QString aLine = aiName() + ": " + as;
-        if (m_chatBuffer.isEmpty() || m_chatBuffer.last() != aLine)
-            m_chatBuffer.append(aLine);
+        m_chatBuffer.append(aLine);
     }
-    while (m_chatBuffer.size() > 10)
+    // trim from the front, but ALWAYS keep at least the current pair
+    while (m_chatBuffer.size() > 12)
         m_chatBuffer.removeFirst();
     maybeSummarize();
 }
@@ -927,22 +1004,25 @@ void AiService::appendNote(const QString &note)
     o.insert("notes", notes);
     writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
     m_userTurns = 0;      // restart the counting window
-    m_chatBuffer.clear(); // fresh window
+    // NOTE: do NOT clear m_chatBuffer here — that wiped the current
+    // conversation every ~3 turns (auto-summary), causing "short-term amnesia".
+    // The recent-chat buffer must survive summarization so the AI keeps the
+    // ongoing topic and emotional state.
 }
 
 // ---- seed recent-chat context from the UI (SQLite history on page open) ----
 void AiService::setChatHistory(const QString &history)
 {
-    // split on newlines; each line is one message already formatted by the UI
+    // NOTE: no dedupe — dropping repeated lines breaks user/AI pairing order
+    // (a repeated "早点休息" would leave an AI line orphaned). Keep the last N.
     m_chatBuffer.clear();
     const QStringList lines = history.split('\n', Qt::SkipEmptyParts);
     for (const QString &l : lines) {
         QString t = l.trimmed();
         if (t.isEmpty()) continue;
-        if (m_chatBuffer.contains(t)) continue; // dedupe — avoid repeating the same line
         m_chatBuffer.append(t);
     }
-    while (m_chatBuffer.size() > 10)
+    while (m_chatBuffer.size() > 12)
         m_chatBuffer.removeFirst();
 }
 
@@ -1062,6 +1142,10 @@ void AiService::sendMessage(const QString &text)
         + "【回复格式】只输出对话内容本身。禁止括号动作（如（温柔地看着你））、星号动作（如*抱住你*）、"
           "旁白。把情绪融入对话（'没关系啦'而非（语气轻）'没关系。'）。\n"
         + "【减少固定模板】禁止频繁'喝水/休息/吃饭/打游戏'式查岗关心，多聊话题、共同经历、兴趣。\n"
+        + "【当前会话状态】（保持连续性：继续当前话题和情绪，不要跳回通用提醒）\n"
+        + conversationStateBlock() + "\n"
+        + "【会话纪律】如果存在未解决的情绪事件（委屈/压力/孤独/寻求陪伴），必须优先处理情绪，"
+          "禁止切换到睡觉/喝水/健康等普通提醒。持续回应当前话题，不要失忆式跳转。\n"
         + "当前策略：" + strategy + "\n"
         + "情绪表达：回复开头用一个情绪令牌表示你此刻的情绪，例如 <|ACT {\"emotion\":\"happy\"}|>；"
           "可用：happy, sad, angry, think, surprised, awkward, question, curious, neutral。令牌不显示给用户。\n"
@@ -1154,6 +1238,8 @@ void AiService::sendMessage(const QString &text)
         if (speech.isEmpty())
             speech = raw.isEmpty() ? "（我没想好说什么…）" : raw;
         m_lastAiReply = speech;
+        // keep the conversation state in sync for the NEXT turn
+        updateConversationState(userForMemory, speech, emotion);
         emit chatReply(speech);
         watcher->deleteLater();
 
