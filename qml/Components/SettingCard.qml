@@ -14,8 +14,10 @@ Rectangle {
     signal clicked()
 
     implicitHeight: 76
-    // unified card: surface fill + hairline border, hover brightens
-    color: root.hovered ? Theme.hoverBgStrong : Theme.card
+    // unified card: near-opaque dark (same colour with/without wallpaper),
+    // hover slightly brighter. No glassmorphism.
+    readonly property color glass: Theme.cardFill
+    color: root.hovered ? Theme.cardFillHover : root.glass
     radius: Theme.rXl
     border.color: Theme.glassBorder
     border.width: 1

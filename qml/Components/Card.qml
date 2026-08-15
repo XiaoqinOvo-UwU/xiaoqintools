@@ -14,15 +14,15 @@ Rectangle {
     signal clicked()
 
     // material: one raised layer + hairline (M3/HIG tone-layering, no shadows).
-    // Hover/press modifies the card's OWN fill (single rounded surface — never
-    // a separate overlay that could render as a boxy highlight).
-    // unified card: surface fill + hairline border on ALL states (consistent
-    // look across pages). Hover only brightens the fill + lifts slightly.
-    color: root.pressed ? Qt.lighter(Theme.surface, 1.12)
-         : root.hovered ? Qt.lighter(Theme.surface, 1.06)
-         : Theme.surface
+    // With the wallpaper on, the card stays the SAME dark colour at ~93%
+    // opacity — no glassmorphism, no hue shift; the wallpaper only tints the
+    // background layer behind it.
+    readonly property color glass: Theme.cardFill
+    color: root.pressed ? Theme.cardFillPress
+         : root.hovered ? Theme.cardFillHover
+         : root.glass
+    border.color: Theme.wallpaperActive ? Qt.rgba(255,255,255,0.08) : Theme.glassBorder
     radius: Theme.rXl
-    border.color: Theme.glassBorder
     border.width: 1
     clip: true
     Behavior on color { ColorAnimation { duration: Theme.durFast } }

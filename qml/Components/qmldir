@@ -11,3 +11,4 @@ SectionLabel 1.0 SectionLabel.qml
 StatusBadge 1.0 StatusBadge.qml
 ResultPanel 1.0 ResultPanel.qml
 IconButton 1.0 IconButton.qml
+WindowButton 1.0 WindowButton.qml

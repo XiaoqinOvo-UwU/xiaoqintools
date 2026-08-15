@@ -7,7 +7,7 @@ import "../Components"
 Page {
     id: page
     padding: 0
-    background: Rectangle { color: Theme.bg }
+    background: Rectangle { color: "transparent" }
 
     Connections {
         target: sysService

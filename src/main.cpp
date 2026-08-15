@@ -6,6 +6,12 @@
 #include <QDir>
 #include <QCoreApplication>
 #include <QtQuickControls2/QQuickStyle>
+#include <QQuickWindow>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <dwmapi.h>
+#endif
 
 #include "Core/AppCore.h"
 #include "Services/ProxyService.h"
@@ -73,6 +79,21 @@ int main(int argc, char *argv[])
         Qt::QueuedConnection);
 
     engine.load(QUrl("qrc:/qml/Main.qml"));
+
+#ifdef Q_OS_WIN
+    // frameless: ask DWM to round the window corners natively (Windows 11).
+    // The window itself stays OPAQUE, so DWM's corner clip produces real
+    // rounded corners with the desktop showing through — no QML shaders needed.
+    if (!engine.rootObjects().isEmpty()) {
+        if (auto *win = qobject_cast<QQuickWindow *>(engine.rootObjects().first())) {
+            HWND hwnd = reinterpret_cast<HWND>(win->winId());
+            const DWORD round = 2; // DWMWCP_ROUND
+            DwmSetWindowAttribute(hwnd, 33 /*DWMWA_WINDOW_CORNER_PREFERENCE*/,
+                                  &round, sizeof(round));
+        }
+    }
+#endif
+
     QObject::connect(&app, &QCoreApplication::aboutToQuit, aiSvc, [aiSvc]() {
         aiSvc->recordSessionEnd();
         aiSvc->stopActivityMonitor();

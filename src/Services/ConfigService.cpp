@@ -47,6 +47,9 @@ void ConfigService::load()
     if (o.contains("allow_state_read")) m_allowStateRead = o.value("allow_state_read").toBool(true);
     if (o.contains("allow_time_record")) m_allowTimeRecord = o.value("allow_time_record").toBool(true);
     if (o.contains("allow_long_term_memory")) m_allowLongTermMemory = o.value("allow_long_term_memory").toBool(true);
+    if (o.contains("wallpaper_blur_enabled")) m_wallpaperBlurEnabled = o.value("wallpaper_blur_enabled").toBool(true);
+    if (o.contains("wallpaper_blur_radius")) m_wallpaperBlurRadius = qBound(0, o.value("wallpaper_blur_radius").toInt(24), 40);
+    if (o.contains("wallpaper_brightness")) m_wallpaperBrightness = qBound(0.0, o.value("wallpaper_brightness").toDouble(0.5), 1.0);
     f.close();
 }
 
@@ -65,6 +68,9 @@ void ConfigService::save()
     o.insert("allow_state_read", m_allowStateRead);
     o.insert("allow_time_record", m_allowTimeRecord);
     o.insert("allow_long_term_memory", m_allowLongTermMemory);
+    o.insert("wallpaper_blur_enabled", m_wallpaperBlurEnabled);
+    o.insert("wallpaper_blur_radius", m_wallpaperBlurRadius);
+    o.insert("wallpaper_brightness", m_wallpaperBrightness);
     QFile f(configPath());
     if (!f.open(QIODevice::WriteOnly)) return;
     f.write(QJsonDocument(o).toJson());

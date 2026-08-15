@@ -1,44 +1,91 @@
 import QtQuick
-import QtQuick.Layouts
 
-// Chat message bubble: AI left / user right, rounded-corner chat style
-// (Telegram-like asymmetric radius), optional time label, hover timestamp.
+// Chat message bubble (Telegram-style): AI left with avatar, user right with
+// avatar. Uniform rXl radius per design-system (cards), hairline border on the
+// AI bubble. Supports an animated three-dot "typing" state.
 Rectangle {
     id: root
 
     property bool isAi: true
     property string text: ""
     property string time: ""
+    property bool typing: false            // show animated dots instead of text
+    property int bubbleMax: 300            // hard cap passed by the delegate
 
-    // Telegram-style asymmetric corners
-    radius: isAi ? Theme.rXl : Theme.rXl
-    color: isAi ? Qt.rgba(1,1,1,0.06) : Theme.accent
+    readonly property int txtPad: 14       // inner horizontal padding
+
+    // natural single-line text width, measured by an UNCONSTRAINED invisible
+    // Text. Using the visible (width-bound, wrapping) txt.implicitWidth would
+    // report the WRAPPED width once text wraps — a feedback loop that shrinks
+    // bubbles and wraps short messages early. This measurer is stable.
+    Text {
+        id: measurer
+        visible: false
+        text: root.text
+        font.pixelSize: Theme.fsBody
+    }
+    readonly property int contentWidth: root.typing ? 0 : measurer.implicitWidth
+
+    // ---- sizing (caller sets `width` from contentWidth) ----
+    implicitWidth: root.typing ? 64 : contentWidth + txtPad * 2
+    implicitHeight: Math.max(36, (root.typing ? dotsRow.height : txt.implicitHeight) + 18)
+
+    radius: Theme.rXl
+    // AI bubble: near-opaque dark (wallpaper never shows through).
+    // User bubble: opaque theme accent — never transparent.
+    color: isAi ? (Theme.wallpaperActive ? Qt.rgba(37/255, 37/255, 37/255, 0.95) : Theme.surface) : Theme.accent
     border.color: isAi ? Theme.glassBorder : "transparent"
-    border.width: isAi ? 1 : 0
+    border.width: 1
 
-    implicitWidth: Math.min(root.parent ? root.parent.width * 0.68 : 320, content.width + 28)
-    implicitHeight: Math.max(36, content.height + 20)
+    // message text
+    Text {
+        id: txt
+        anchors.fill: parent
+        anchors.margins: root.txtPad
+        visible: !root.typing
+        text: root.text
+        color: Theme.text
+        font.pixelSize: Theme.fsBody
+        wrapMode: Text.Wrap
+        textFormat: Text.PlainText
+        verticalAlignment: Text.AlignVCenter
+    }
 
-    ColumnLayout {
-        id: content
-        width: root.width - 28
-        anchors.horizontalCenter: parent.horizontalCenter
-        spacing: 2
-        Text {
-            Layout.fillWidth: true
-            text: root.text
-            color: Theme.text
-            font.pixelSize: Theme.fsDefault
-            wrapMode: Text.Wrap
-            textFormat: Text.PlainText
+    // ---- typing indicator: three dots that pulse in sequence ----
+    Row {
+        id: dotsRow
+        anchors.centerIn: parent
+        spacing: 4
+        visible: root.typing
+        property int phase: 0
+        Timer {
+            interval: 220
+            repeat: true
+            running: root.typing
+            onTriggered: dotsRow.phase = (dotsRow.phase + 1) % 3
         }
-        Text {
-            text: root.time
-            color: Theme.textDim
-            font.pixelSize: 10
-            horizontalAlignment: isAi ? Text.AlignLeft : Text.AlignRight
-            Layout.alignment: isAi ? Qt.AlignLeft : Qt.AlignRight
-            visible: root.time.length > 0
+        Repeater {
+            model: 3
+            Rectangle {
+                width: 6; height: 6; radius: 3
+                color: Theme.textDim
+                opacity: dotsRow.phase === index ? 1 : 0.35
+                scale: dotsRow.phase === index ? 1.2 : 1.0
+                Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+            }
         }
+    }
+
+    // time label (unused for now; kept for API compatibility)
+    Text {
+        visible: !root.typing && root.time.length > 0
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 2
+        anchors.right: root.isAi ? parent.left : parent.right
+        anchors.rightMargin: 8
+        text: root.time
+        color: Theme.textDim
+        font.pixelSize: Theme.fsCaption
     }
 }

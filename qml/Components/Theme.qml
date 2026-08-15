@@ -84,4 +84,31 @@ QtObject {
     readonly property int durFast:   120
     readonly property int durMid:    200
     readonly property int durSlow:   320
+
+    // ================= WALLPAPER STATE (set by Main.qml) =================
+    // The wallpaper only affects the background LAYER. UI stays near-opaque
+    // dark — NO glassmorphism / acrylic / white glass. This mimics "dark
+    // desktop + wallpaper", not a transparent webpage.
+    property bool wallpaperActive: false
+
+    // ---- cards: original dark colour, only slight translucency (0.85) so the
+    // (already 20% faded) wallpaper tints behind without harming readability.
+    // NOTE: Qt.rgba() does NOT scale 0-255 — use fractions (/255) or it clamps
+    // to 1.0 and renders WHITE.
+    readonly property color cardFill: wallpaperActive ? Qt.rgba(24/255, 24/255, 24/255, 0.85) : Theme.surface
+    readonly property color cardFillHover: wallpaperActive ? Qt.rgba(31/255, 31/255, 31/255, 0.85) : Theme.hoverBgStrong
+    readonly property color cardFillPress: wallpaperActive ? Qt.rgba(38/255, 38/255, 38/255, 0.85) : Theme.hoverBgStrong
+
+    // ---- buttons: #242424 default, hover slightly brighter, NO white fill ----
+    readonly property color btnFill: wallpaperActive ? Qt.rgba(36/255, 36/255, 36/255, 0.95) : Qt.rgba(1,1,1,0.08)
+    readonly property color btnFillHover: wallpaperActive ? Qt.rgba(52/255, 52/255, 52/255, 0.95) : Qt.rgba(1,1,1,0.14)
+    readonly property color btnFillPress: wallpaperActive ? Qt.rgba(60/255, 60/255, 60/255, 0.95) : Qt.rgba(1,1,1,0.20)
+    readonly property color btnBorder: wallpaperActive ? Qt.rgba(255,255,255,0.10) : Qt.rgba(1,1,1,0.12)
+
+    // ---- chat overlay: independent layer; bg lets the wallpaper show through
+    // (0.60), while bubbles/input stay near-opaque for readability ----
+    readonly property color chatBg: wallpaperActive ? Qt.rgba(15/255, 15/255, 15/255, 0.60) : Theme.bg      // chat panel backdrop
+    readonly property color chatPanelBg: wallpaperActive ? Qt.rgba(18/255, 18/255, 18/255, 0.90) : Theme.surface // chat header/input bar
+    readonly property color aiBubbleFill: wallpaperActive ? Qt.rgba(37/255, 37/255, 37/255, 0.95) : Theme.surface // AI bubble (user stays opaque accent)
+    readonly property color inputFill: wallpaperActive ? Qt.rgba(28/255, 28/255, 28/255, 0.95) : Theme.inputBg
 }

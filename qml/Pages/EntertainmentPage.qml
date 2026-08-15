@@ -7,7 +7,7 @@ import "../Components"
 Page {
     id: root
     padding: 0
-    background: Rectangle { color: Theme.bg }
+    background: Rectangle { color: "transparent" }
 
     property string result: ""
     property bool prankOn: false
@@ -268,7 +268,7 @@ Page {
         background: Rectangle {
             color: Theme.surface
             radius: 16
-            border.color: Qt.rgba(255,180,220,0.25)
+            border.color: Qt.rgba(255/255,180/255,220/255,0.25)
             border.width: 1
         }
         header: Item {
@@ -306,7 +306,7 @@ Page {
                         width: parent.width
                         height: 44
                         radius: 22
-                        color: mouse.hovered ? Qt.rgba(255,180,210,0.25) : Qt.rgba(255,180,210,0.10)
+                        color: mouse.hovered ? Qt.rgba(255/255,180/255,210/255,0.25) : Qt.rgba(255/255,180/255,210/255,0.10)
                         border.color: Qt.rgba(255,200,225,0.25)
                         border.width: 1
                         Text {

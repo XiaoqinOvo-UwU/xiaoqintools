@@ -21,6 +21,7 @@
         <file>../qml/Components/StatusBadge.qml</file>
         <file>../qml/Components/ResultPanel.qml</file>
         <file>../qml/Components/IconButton.qml</file>
+        <file>../qml/Components/WindowButton.qml</file>
         <file>../qml/Components/qmldir</file>
         <file>../qml/Pages/NetworkPage.qml</file>
         <file>../qml/Pages/SystemPage.qml</file>

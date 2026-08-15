@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(XiaoQinTools VERSION 3.8.5 LANGUAGES CXX)
+project(XiaoQinTools VERSION 3.8.6 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -89,6 +89,7 @@ target_link_libraries(XiaoQinTools PRIVATE
     Qt6::QuickControls2
     Qt6::Concurrent
     winmm
+    dwmapi
 )
 
 # QML deployment

@@ -14,7 +14,18 @@ ApplicationWindow {
     minimumHeight: 600
     visible: true
     title: "小钦的工具"
-    color: Theme.bg
+    color: Theme.bg   // opaque — DWM rounds the frameless window corners natively
+
+    // frameless: the native title bar is replaced by the custom title strip
+    // below so the window chrome blends into the app (Discord/Telegram style).
+    flags: Qt.Window | Qt.FramelessWindowHint
+
+    // ---- frameless helpers ----
+    function isMaximized() { return root.visibility === Window.Maximized }
+    function toggleMaximize() {
+        if (root.isMaximized()) root.showNormal()
+        else root.showMaximized()
+    }
 
     // Global dark palette so Quick Controls render dark.
     palette {
@@ -34,6 +45,30 @@ ApplicationWindow {
 
     property int currentPage: 0
     property string aiGreeting: "你好。"
+    property bool userBtnHover: false   // sidebar user-avatar ⌄ hover flag
+
+    // custom wallpaper (blurred copy from AiService) shown behind the right pane.
+    // Layer 1 only — the dark overlay + near-opaque UI sit ABOVE it.
+    property string wallpaperUrl: ""
+    property real wallpaperBrightness: 0.5    // 0..1 avg luminance, drives the dark overlay
+    function refreshWallpaper() {
+        var oldUrl = root.wallpaperUrl
+        root.wallpaperUrl = aiService.wallpaperPath()
+        root.wallpaperBrightness = aiService.wallpaperBrightness()
+        Theme.wallpaperActive = root.wallpaperUrl.length > 0
+        // crossfade only when switching between two real wallpapers (300ms)
+        if (oldUrl.length > 0 && root.wallpaperUrl.length > 0 && oldUrl !== root.wallpaperUrl) {
+            wpFront.source = root.wallpaperUrl
+            wpFront.opacity = 0
+            wpCrossfade.start()
+        } else if (oldUrl.length === 0 && root.wallpaperUrl.length > 0) {
+            wpBack.source = root.wallpaperUrl   // first set: just show
+        }
+    }
+    Connections {
+        target: aiService
+        function onWallpaperChanged() { root.refreshWallpaper() }
+    }
 
     // contact list model (id|name|hasAvatar)
     ListModel { id: contactModel }
@@ -88,18 +123,100 @@ ApplicationWindow {
         return "file:///" + p.replace(/\\/g, "/")
     }
 
-    RowLayout {
+    // ================= ROUNDED WINDOW FRAME =================
+    // frameless window; Windows 11 DWM rounds the corners natively (opaque
+    // window, so the corner clip is handled by the OS).
+    Rectangle {
+        id: rootPanel
+        anchors.fill: parent
+        radius: Theme.rXl
+        color: Theme.bg
+        border.color: Qt.rgba(255,255,255,0.07)
+        border.width: 1
+        clip: true
+
+    ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // ================= LEFT NAVIGATION =================
+        // ================= CUSTOM TITLE STRIP (frameless) =================
+        // blends into the app: dark, matches the sidebar tone, window controls
+        // on the right (Discord/Telegram/Linear style).
         Rectangle {
-            Layout.preferredWidth: 248
-            Layout.fillHeight: true
+            id: titleBar
+            Layout.fillWidth: true
+            Layout.preferredHeight: 36
             color: Theme.sidebar
 
-            ColumnLayout {
+            // drag region (whole strip minus the control buttons)
+            MouseArea {
+                id: titleDrag
                 anchors.fill: parent
+                anchors.right: winControls.left
+                cursorShape: Qt.ArrowCursor
+                onPressed: function(mouse) { if (mouse.button === Qt.LeftButton) root.startSystemMove() }
+                onDoubleClicked: root.toggleMaximize()
+            }
+
+            // subtle hairline under the strip
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: Theme.glassBorder
+            }
+
+            // app icon + title — blends over the sidebar zone (restores the
+            // icon that the native title bar used to show top-left)
+            Image {
+                anchors.left: parent.left
+                anchors.leftMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
+                width: 16; height: 16
+                source: "qrc:/icons/app.ico"
+                fillMode: Image.PreserveAspectFit
+            }
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 38
+                anchors.verticalCenter: parent.verticalCenter
+                text: "小钦的工具"
+                color: Theme.textDim
+                font.pixelSize: Theme.fsCaption
+                font.bold: true
+            }
+
+            // window controls: minimize / maximize / close
+            Row {
+                id: winControls
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                spacing: 0
+                WindowButton { variant: "min"; tip: "最小化"; onClicked: root.showMinimized() }
+                WindowButton {
+                    variant: root.isMaximized() ? "restore" : "max"
+                    tip: root.isMaximized() ? "还原" : "最大化"
+                    onClicked: root.toggleMaximize()
+                }
+                WindowButton { variant: "close"; tip: "关闭"; onClicked: Qt.quit() }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 0
+
+            // ================= LEFT NAVIGATION =================
+            Rectangle {
+                Layout.preferredWidth: 248
+                Layout.fillHeight: true
+                color: Theme.sidebar
+
+                ColumnLayout {
+                    anchors.fill: parent
                 spacing: 0
 
                 // ---- top: user avatar + name ----
@@ -160,12 +277,14 @@ ApplicationWindow {
 
                         Item { Layout.fillWidth: true }
 
+                        // shows on hover — uses an explicit flag (onEntered/onExited)
+                        // because MouseArea.hovered is unavailable in this Qt build
                         Text {
                             text: "⌄"
                             color: Theme.textDim
                             font.pixelSize: 16
-                            visible: userBtn.hovered
-                            opacity: userBtn.hovered ? 1 : 0
+                            visible: root.userBtnHover
+                            opacity: root.userBtnHover ? 1 : 0
                             Behavior on opacity { NumberAnimation { duration: 150 } }
                         }
                     }
@@ -173,6 +292,8 @@ ApplicationWindow {
                         id: userBtn
                         anchors.fill: parent
                         hoverEnabled: true
+                        onEntered: root.userBtnHover = true
+                        onExited: root.userBtnHover = false
                         onClicked: userMenu.popup(userBtn, 0, userBtn.height + 4)
                     }
                 }
@@ -381,6 +502,18 @@ ApplicationWindow {
                         Behavior on color { ColorAnimation { duration: 140 } }
                         focus: true
 
+                        // selected: left thin line (Linear/macOS settings style)
+                        Rectangle {
+                            width: 2; height: active ? 20 : 0
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            color: Theme.text
+                            radius: 1
+                            opacity: active ? 1 : 0
+                            Behavior on height { NumberAnimation { duration: Theme.durMid; easing.type: Easing.OutCubic } }
+                            Behavior on opacity { NumberAnimation { duration: Theme.durMid } }
+                        }
+
                         Keys.onReturnPressed: activate()
                         Keys.onEnterPressed: activate()
                         Keys.onSpacePressed: activate()
@@ -419,7 +552,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.8.5"
+                        text: "小钦的工具 v3.8.6"
                         color: Theme.textDim
                         font.pixelSize: Theme.fsCaption
                     }
@@ -431,12 +564,66 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Theme.bg
+            color: "transparent"
+
+            // ================= LAYER 1: WALLPAPER BACKGROUND =================
+            // Only this layer shows the wallpaper — at 20% opacity so it can
+            // NEVER wash out the UI. 300ms crossfade on change.
+            Item {
+                anchors.fill: parent
+                visible: root.wallpaperUrl.length > 0
+                Image {
+                    id: wpBack
+                    anchors.fill: parent
+                    source: root.wallpaperUrl
+                    fillMode: Image.PreserveAspectCrop
+                    smooth: true
+                    opacity: 0.20
+                }
+                Image {
+                    id: wpFront
+                    anchors.fill: parent
+                    source: ""
+                    fillMode: Image.PreserveAspectCrop
+                    smooth: true
+                    opacity: 0
+                }
+                SequentialAnimation {
+                    id: wpCrossfade
+                    NumberAnimation { target: wpFront; property: "opacity"; from: 0; to: 0.20; duration: 300; easing.type: Easing.OutCubic }
+                    ScriptAction { script: { wpBack.source = wpFront.source; wpFront.source = ""; wpFront.opacity = 0 } }
+                }
+            }
+
+            // ================= LAYER 2: DARK OVERLAY =================
+            // Adapts to the wallpaper brightness (0.45 dark .. 0.65 bright).
+            Rectangle {
+                anchors.fill: parent
+                color: root.wallpaperUrl.length > 0
+                     ? Qt.rgba(0, 0, 0, 0.45 + 0.20 * root.wallpaperBrightness)
+                     : "transparent"
+            }
+
+            // subtle vignette: darken the extreme top/bottom edges so cards and
+            // the header pop (depth, macOS dark-desktop feel). No white/glass.
+            Rectangle {
+                anchors.fill: parent
+                visible: root.wallpaperUrl.length > 0
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0.30) }
+                    GradientStop { position: 0.20; color: Qt.rgba(0, 0, 0, 0.0) }
+                    GradientStop { position: 0.80; color: Qt.rgba(0, 0, 0, 0.0) }
+                    GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.30) }
+                }
+            }
 
             StackLayout {
                 id: pageStack
                 anchors.fill: parent
                 currentIndex: root.currentPage
+                // LAYER 3 is hidden while the chat overlay (LAYER 4) is open, so
+                // business pages never show through the chat.
+                visible: !root.chatOpen
 
                 onCurrentIndexChanged: {
                     var item = pageStack.currentItem
@@ -469,10 +656,52 @@ ApplicationWindow {
                 anchors.fill: parent
                 visible: root.chatOpen
                 aiAvatarSource: root.aiAvatarPath
+                userAvatarSource: root.userAvatarPath
                 onBackRequested: chatPage.closeWithAnim()
                 onCloseFinished: root.chatOpen = false
                 onAiProfileRequested: aiProfileDialog.open()
             }
+        }
+    }
+    } // end ColumnLayout (title strip + content)
+    } // end rootPanel (rounded window frame)
+
+    // ===== frameless resize handles (native startSystemResize) =====
+    // invisible strips on the window edges so a frameless window can be resized
+    Rectangle {
+        width: parent.width; height: 6
+        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+        color: "transparent"; z: 20
+        MouseArea {
+            anchors.fill: parent; cursorShape: Qt.SizeVerCursor
+            onPressed: root.startSystemResize(Qt.BottomEdge)
+        }
+    }
+    Rectangle {
+        width: 6; height: parent.height
+        anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
+        color: "transparent"; z: 20
+        MouseArea {
+            anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+            onPressed: root.startSystemResize(Qt.RightEdge)
+        }
+    }
+    Rectangle {
+        width: 14; height: 14
+        anchors.right: parent.right; anchors.bottom: parent.bottom
+        color: "transparent"; z: 20
+        MouseArea {
+            anchors.fill: parent; cursorShape: Qt.SizeFDiagCursor
+            onPressed: root.startSystemResize(Qt.BottomEdge | Qt.RightEdge)
+        }
+    }
+    Rectangle {
+        width: 14; height: 14
+        anchors.left: parent.left; anchors.bottom: parent.bottom
+        color: "transparent"; z: 20
+        MouseArea {
+            anchors.fill: parent; cursorShape: Qt.SizeBDiagCursor
+            onPressed: root.startSystemResize(Qt.BottomEdge | Qt.LeftEdge)
         }
     }
 
@@ -1227,6 +1456,7 @@ ApplicationWindow {
         // load avatars (files may appear after first upload)
         root.aiAvatarPath = toFileUrl(aiService.aiAvatarPath())
         root.userAvatarPath = toFileUrl(aiService.userAvatarPath())
+        root.refreshWallpaper()
         root.refreshContacts()
         root.aiGreeting = aiService.greeting()
         if (aiService.shouldGreetToday()) {

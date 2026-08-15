@@ -6,9 +6,11 @@ import "../Components"
 
 // Full-screen chat page (QQ/WeChat style), opened from the sidebar AI card.
 // Conversation is persisted per contact (SQLite) — reopening keeps the same chat.
+// INDEPENDENT chat overlay: owns its own near-opaque background so business
+// pages never show through. The wallpaper is only faintly felt behind it.
 Rectangle {
     id: chatPage
-    color: Theme.bg
+    color: Theme.chatBg
     anchors.fill: parent
 
     // enter: slide in from LEFT with a bouncy OutBack; exit: slide out to RIGHT
@@ -86,8 +88,8 @@ Rectangle {
     // open animation (explicit object — no Behavior races)
     ParallelAnimation {
         id: openAnim
-        NumberAnimation { target: chatPage; property: "opacity"; from: 0; to: 1; duration: 180; easing.type: Easing.OutQuad }
-        NumberAnimation { target: chatPage; property: "x"; from: -chatPage.width; to: 0; duration: 340; easing.type: Easing.OutBack; easing.overshoot: 1.15 }
+        NumberAnimation { target: chatPage; property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
+        NumberAnimation { target: chatPage; property: "x"; from: -chatPage.width; to: 0; duration: 200; easing.type: Easing.OutCubic }
     }
 
     // closing animation: slide right, then notify parent to hide
@@ -96,8 +98,8 @@ Rectangle {
     }
     ParallelAnimation {
         id: closeAnim
-        NumberAnimation { target: chatPage; property: "opacity"; to: 0; duration: 180; easing.type: Easing.InQuad }
-        NumberAnimation { target: chatPage; property: "x"; to: chatPage.width; duration: 300; easing.type: Easing.InCubic }
+        NumberAnimation { target: chatPage; property: "opacity"; to: 0; duration: 160; easing.type: Easing.InCubic }
+        NumberAnimation { target: chatPage; property: "x"; to: chatPage.width; duration: 200; easing.type: Easing.InCubic }
         onFinished: chatPage.closeFinished()
     }
 
@@ -125,7 +127,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 56
-            color: Theme.surface
+            color: Theme.chatPanelBg
             border.color: Theme.glassBorder
             border.width: 1
 
@@ -185,37 +187,58 @@ Rectangle {
                         font.bold: true
                         verticalAlignment: Text.AlignVCenter
                     }
-                    Text {
-                        id: headerStatus
-                        text: "在线"
-                        color: Theme.ok
-                        font.pixelSize: 11
-                        verticalAlignment: Text.AlignVCenter
+                    // presence: colored dot + status (dot turns amber while typing)
+                    Row {
+                        spacing: 5
+                        Rectangle {
+                            id: statusDot
+                            width: 7; height: 7; radius: 3.5
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Theme.ok
+                            Behavior on color { ColorAnimation { duration: Theme.durMid; easing.type: Easing.OutCubic } }
+                        }
+                        Text {
+                            id: headerStatus
+                            text: "在线"
+                            color: Theme.ok
+                            font.pixelSize: Theme.fsCaption
+                            verticalAlignment: Text.AlignVCenter
+                        }
                     }
                 }
             }
 
-            // AIRI-style emotion badge: pops over the AI avatar (overlay, never
-            // touches the name/status area)
+            // emotion badge: single character glyph + accent dot (project rule:
+            // no emoji icons). Pops over the AI avatar, never touches name/status.
             Rectangle {
                 id: emotionBadge
-                width: 24; height: 24
-                radius: 12
+                width: 26; height: 26
+                radius: 13
                 color: Theme.surface
                 border.color: Theme.glassBorder
                 border.width: 1
                 anchors.left: parent.left
                 anchors.top: parent.top
-                anchors.topMargin: 4
-                anchors.leftMargin: 56
+                anchors.topMargin: 6
+                anchors.leftMargin: 52
                 visible: emotionEmoji.length > 0
                 opacity: 0
                 scale: 0.4
+                Rectangle {
+                    width: 5; height: 5; radius: 2.5
+                    anchors.top: parent.top
+                    anchors.topMargin: 3
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    color: emotionColor
+                }
                 Text {
                     id: emotionText
                     anchors.centerIn: parent
+                    anchors.verticalCenterOffset: 2
                     text: emotionEmoji
+                    color: emotionColor
                     font.pixelSize: 13
+                    font.bold: true
                 }
                 ParallelAnimation {
                     id: emotionPop
@@ -266,67 +289,112 @@ Rectangle {
                     Qt.callLater(function() { Qt.callLater(function() { positionViewAtEnd() }) })
                 }
             }
-            delegate: Rectangle {
+            delegate: Item {
                 id: delegateRoot
                 width: msgView.width
-                height: bubbleRect.height + 12
-                color: "transparent"
+                height: Math.max(44, bubbleRow.height) + 14
 
-                // TG-style message enter animation: slide up + fade in
-                transform: Translate { id: msgTrans; y: 14 }
+                // TG-style message enter animation: slide up + fade in + subtle pop
+                transform: Translate { id: msgTrans; y: 16 }
                 Component.onCompleted: {
                     delegateRoot.opacity = 0
-                    msgTrans.y = 14
+                    msgTrans.y = 16
                     animIn.start()
                 }
                 SequentialAnimation {
                     id: animIn
                     NumberAnimation { target: delegateRoot; property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
-                    NumberAnimation { target: msgTrans; property: "y"; from: 14; to: 0; duration: 220; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: msgTrans; property: "y"; from: 16; to: 0; duration: 240; easing.type: Easing.OutCubic }
                 }
 
-                // message bubble: AI left, user right (anchor-based, reliable sizing)
-                Rectangle {
-                    id: bubbleRect
-                    width: Math.min(msgText.implicitWidth + 24, msgView.width * 0.7)
-                    height: Math.max(38, msgText.implicitHeight + 18)
-                    radius: 10
-                    color: model.isAi ? Theme.glassHover : Theme.accent
+                Item {
+                    id: bubbleRow
+                    width: msgView.width
+                    height: bubble.height
                     anchors.top: parent.top
-                    anchors.topMargin: 6
-                    anchors.left: model.isAi ? parent.left : undefined
-                    anchors.right: model.isAi ? undefined : parent.right
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    Text {
-                        id: msgText
-                        anchors.fill: parent
-                        anchors.margins: 10
+                    anchors.topMargin: 8
+
+                    // avatars: AI left, user right (36px — readable next to bubbles)
+                    Avatar {
+                        id: aiAv
+                        size: 36
+                        source: chatPage.aiAvatarSource
+                        charText: aiService.aiName().length > 0 ? aiService.aiName().charAt(0) : "A"
+                        anchors.left: parent.left
+                        anchors.leftMargin: 12
+                        anchors.top: parent.top
+                        visible: model.isAi
+                    }
+                    Avatar {
+                        id: userAv
+                        size: 36
+                        source: chatPage.userAvatarSource
+                        charText: aiService.userName().length > 0 ? aiService.userName().charAt(0) : "我"
+                        anchors.right: parent.right
+                        anchors.rightMargin: 12
+                        anchors.top: parent.top
+                        visible: !model.isAi
+                    }
+
+                    MessageBubble {
+                        id: bubble
+                        isAi: model.isAi
                         text: model.msg
-                        color: Theme.text
-                        font.pixelSize: 13
-                        wrapMode: Text.Wrap
-                        verticalAlignment: Text.AlignVCenter
-                        horizontalAlignment: Text.AlignLeft
-                        // when this bubble's text wraps to more lines, keep the
-                        // view pinned to the bottom (multi-line replies)
-                        onImplicitHeightChanged: {
-                            if (msgView.stickToBottom) {
-                                Qt.callLater(function() { msgView.positionViewAtEnd() })
-                                Qt.callLater(function() { Qt.callLater(function() { msgView.positionViewAtEnd() }) })
+                        typing: model.msg === "..."     // animated three-dot reply state
+
+                        // invisible center line: each side shares half the width,
+                        // text wraps automatically once it would cross the line.
+                        // floor of 150 keeps narrow windows readable.
+                        readonly property real centerLimit: Math.max(150, msgView.width / 2 - 56)
+                        width: model.msg === "..."
+                                   ? 64
+                                   : Math.min(bubble.contentWidth + 28, bubble.centerLimit)
+
+                        anchors.left: model.isAi ? aiAv.right : undefined
+                        anchors.leftMargin: model.isAi ? 8 : 0
+                        anchors.right: model.isAi ? undefined : userAv.left
+                        anchors.rightMargin: model.isAi ? 0 : 8
+                        anchors.top: parent.top
+
+                        // reveal pop when the typing placeholder turns into text
+                        property string prevText: ""
+                        onTextChanged: {
+                            if (text !== "..." && text !== prevText) {
+                                prevText = text
+                                bubblePop.start()
+                            }
+                        }
+                        transform: Scale { id: bubbleScale; xScale: 1; yScale: 1 }
+                        ParallelAnimation {
+                            id: bubblePop
+                            NumberAnimation { target: bubbleScale; property: "xScale"; from: 0.97; to: 1.0; duration: 220; easing.type: Easing.OutBack }
+                            NumberAnimation { target: bubbleScale; property: "yScale"; from: 0.97; to: 1.0; duration: 220; easing.type: Easing.OutBack }
+                        }
+
+                        // multi-line replies: keep the view pinned to the bottom
+                        onHeightChanged: {
+                            if (msgView && msgView.stickToBottom) {
+                                Qt.callLater(function() { if (msgView) msgView.positionViewAtEnd() })
+                                Qt.callLater(function() { Qt.callLater(function() { if (msgView) msgView.positionViewAtEnd() }) })
                             }
                         }
                     }
                 }
             }
         }
-        // empty chat state: explain + invite to start (never a blank panel)
+        // empty chat state: avatar + invite (never a blank panel)
         Column {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignHCenter | Qt.AlignTop
-            Layout.topMargin: 60
+            Layout.topMargin: 56
             visible: msgModel.count === 0
-            spacing: Theme.sp2
+            spacing: Theme.sp3
+            Avatar {
+                size: 56
+                source: chatPage.aiAvatarSource
+                charText: aiService.aiName().length > 0 ? aiService.aiName().charAt(0) : "A"
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: "还没有消息"
@@ -346,7 +414,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 60
-            color: Theme.surface
+            color: Theme.chatPanelBg
             border.color: Theme.glassBorder
             border.width: 1
 
@@ -357,8 +425,11 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 38
-                    radius: 19
-                    color: Theme.inputBg
+                    radius: 16
+                    color: Theme.inputFill
+                    // visible focus ring when the input is active (a11y)
+                    border.color: chatInput.activeFocus ? Theme.focusRing : "transparent"
+                    border.width: 1
                     TextField {
                         id: chatInput
                         anchors.fill: parent
@@ -366,7 +437,7 @@ Rectangle {
                         placeholderText: "输入消息..."
                         placeholderTextColor: Theme.textDim
                         background: null
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.fsBody
                         leftPadding: 16
                         rightPadding: 16
                         topPadding: 0
@@ -379,9 +450,11 @@ Rectangle {
                         }
                     }
                 }
+                // fixed-width send button (no layout shift while replying)
                 AppButton {
-                    text: replyBusy ? "回复中…" : "发送"
-                    implicitWidth: replyBusy ? 88 : 64
+                    text: replyBusy ? "回复中" : "发送"
+                    variant: "primary"
+                    implicitWidth: 76
                     implicitHeight: 38
                     onClicked: sendMsg()
                 }
@@ -409,7 +482,8 @@ Rectangle {
 
     function setHeaderStatus(s) {
         headerStatus.text = s
-        headerStatus.color = s === "在线" ? Theme.ok : Theme.warn
+        headerStatus.color = (s === "在线") ? Theme.ok : Theme.warn
+        statusDot.color = headerStatus.color
     }
 
     // human-like reply delay: wait "typing time" proportional to text length,
@@ -522,18 +596,25 @@ Rectangle {
     property string aiAvatarSource: ""
     property string userAvatarSource: ""
 
-    // ---- AIRI-style emotion state ----
-    property string emotionEmoji: ""
-    property var emotionMap: ({
-        "happy": "😊", "sad": "😢", "angry": "😠", "think": "🤔",
-        "surprised": "😲", "awkward": "😅", "question": "🤔",
-        "curious": "🤔", "neutral": "😐", "love": "🥰", "tired": "😪"
+    // ---- AI emotion state (character glyphs — project rule: no emoji icons) ----
+    property string emotionEmoji: ""          // single CJK glyph, e.g. "喜"
+    property color emotionColor: Theme.ok
+    property var emotionChars: ({
+        "happy": "喜", "sad": "忧", "angry": "怒", "think": "思",
+        "surprised": "惊", "awkward": "尬", "question": "疑",
+        "curious": "奇", "neutral": "平", "love": "爱", "tired": "倦"
+    })
+    property var emotionColors: ({
+        "happy": "#5FA87A", "sad": "#C55A5A", "angry": "#C55A5A", "think": "#C9A15A",
+        "surprised": "#C9A15A", "awkward": "#9A9A9A", "question": "#C9A15A",
+        "curious": "#C9A15A", "neutral": "#9A9A9A", "love": "#C55A5A", "tired": "#C9A15A"
     })
 
     function playEmotion(name, intensity) {
-        var e = emotionMap[name]
-        if (!e) return
-        emotionEmoji = e
+        var c = emotionChars[name]
+        if (!c) return
+        emotionEmoji = c
+        emotionColor = emotionColors[name] || Theme.ok
         emotionPop.stop()
         emotionFade.stop()
         emotionPop.start()

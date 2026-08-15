@@ -11,15 +11,14 @@ Rectangle {
     property bool pressed: false
     signal clicked()
 
-    // frosted glass look
+    // dark action card by default; wallpaper on -> near-opaque dark (no white
+    // acrylic glass). No glassmorphism when the wallpaper is active.
     implicitWidth: 180
     implicitHeight: 92
     radius: 12
-
-    // translucent frosted look (flat, low-saturation, no gradients)
-    color: pressed ? Qt.rgba(255,255,255,0.18)
-         : hovered ? Qt.rgba(255,255,255,0.12)
-         : Qt.rgba(255,255,255,0.06)
+    color: pressed ? (Theme.wallpaperActive ? Qt.rgba(44/255,44/255,44/255,0.93) : Qt.rgba(255,255,255,0.18))
+         : hovered ? (Theme.wallpaperActive ? Qt.rgba(40/255,40/255,40/255,0.93) : Qt.rgba(255,255,255,0.12))
+         : (Theme.wallpaperActive ? Qt.rgba(34/255,34/255,34/255,0.93) : Qt.rgba(255,255,255,0.06))
     border.color: Qt.rgba(255,255,255,0.10)
     border.width: 1
 

@@ -90,6 +90,17 @@ public:
     Q_INVOKABLE QString setUserAvatar(const QString &srcPath);
     Q_INVOKABLE QString userAvatarPath();
 
+    // ---- custom wallpaper (blurred copy shown behind the right content pane) ----
+    Q_INVOKABLE QString wallpaperPath();                  // file:// url of the effective copy ("" if none)
+    Q_INVOKABLE QString setWallpaper(const QString &srcPath); // copy + blur -> returns wallpaperPath()
+    Q_INVOKABLE QString setWallpaperPreset(int index);    // built-in dark gradient (0..3)
+    Q_INVOKABLE void removeWallpaper();
+    Q_INVOKABLE bool wallpaperBlurEnabled();
+    Q_INVOKABLE void setWallpaperBlurEnabled(bool v);     // regenerates the blurred copy
+    Q_INVOKABLE int wallpaperBlurRadius();
+    Q_INVOKABLE void setWallpaperBlurRadius(int r);       // 0..40, regenerates the blurred copy
+    Q_INVOKABLE double wallpaperBrightness();             // 0..1 average luminance (drives dark overlay)
+
     // lifecycle: call on app start / exit to record sessions
     Q_INVOKABLE void recordSessionStart();
     Q_INVOKABLE void recordSessionEnd();
@@ -142,6 +153,7 @@ signals:
     void greetingReady(QString text);
     void emotionSignal(QString emotion, qreal intensity); // AIRI-style ACT token playback
     void profileChanged();                               // name/avatar/persona changed -> refresh UI
+    void wallpaperChanged();                             // custom wallpaper set/removed -> refresh backdrop
 
 private:
     QString memoryPath() const;
@@ -179,4 +191,8 @@ private:
     // v3.9: conflict resolution + importance-gated memory write
     void runConflictResolution(const QString &userText, const QString &memJson);
     void bumpRecalledUsage(const QString &userMsg, const QString &topic);
+
+    void regenerateWallpaper();      // re-blur wallpaper.png at the current radius
+    void applyWallpaperBlur();       // debounced regenerate + notify (main thread)
+    QTimer *m_wallpaperDebounce = nullptr;
 };

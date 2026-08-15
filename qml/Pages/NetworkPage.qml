@@ -8,7 +8,7 @@ import "../Components"
 Page {
     id: page
     padding: 0
-    background: Rectangle { color: Theme.bg }
+    background: Rectangle { color: "transparent" }
 
     property string proxyStatus: "检测中..."
     property bool proxyBusy: false

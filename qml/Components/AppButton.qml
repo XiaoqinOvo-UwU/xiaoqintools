@@ -26,15 +26,19 @@ Button {
 
     property color vFill: variant === "primary" ? Theme.accent
                         : variant === "ghost" ? "transparent"
+                        : Theme.wallpaperActive ? Theme.btnFill
                         : (glassColor.a > 0 ? glassColor : Qt.rgba(1,1,1,0.08))
     property color vFillHover: variant === "primary" ? Theme.accentHover
                              : variant === "ghost" ? Qt.rgba(1,1,1,0.05)
+                             : Theme.wallpaperActive ? Theme.btnFillHover
                              : (glassHover.a > 0 ? glassHover : Qt.rgba(1,1,1,0.14))
     property color vFillPress: variant === "primary" ? Theme.accentHover
                              : variant === "ghost" ? Qt.rgba(1,1,1,0.08)
+                             : Theme.wallpaperActive ? Theme.btnFillPress
                              : (glassPress.a > 0 ? glassPress : Qt.rgba(1,1,1,0.20))
     property color vBorder: variant === "primary" ? "transparent"
                           : variant === "ghost" ? "transparent"
+                          : Theme.wallpaperActive ? Theme.btnBorder
                           : (borderColor.a > 0 ? borderColor : Qt.rgba(1,1,1,0.12))
     property color vText: variant === "primary" ? "#FFFFFF"
                         : root.enabled ? Theme.text : Theme.textDim

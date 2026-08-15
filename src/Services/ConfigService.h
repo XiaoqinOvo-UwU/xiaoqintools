@@ -30,6 +30,16 @@ public:
     void setAllowTimeRecord(bool v) { m_allowTimeRecord = v; save(); }
     void setAllowLongTermMemory(bool v) { m_allowLongTermMemory = v; save(); }
 
+    // wallpaper blur (default on, radius 24)
+    bool wallpaperBlurEnabled() const { return m_wallpaperBlurEnabled; }
+    int  wallpaperBlurRadius() const { return m_wallpaperBlurRadius; }
+    void setWallpaperBlurEnabled(bool v) { m_wallpaperBlurEnabled = v; save(); }
+    void setWallpaperBlurRadius(int v) { m_wallpaperBlurRadius = qBound(0, v, 40); save(); }
+
+    // wallpaper average luminance (0=dark .. 1=bright) — drives the dark overlay
+    double wallpaperBrightness() const { return m_wallpaperBrightness; }
+    void setWallpaperBrightness(double v) { m_wallpaperBrightness = qBound(0.0, v, 1.0); save(); }
+
     void setBaseUrl(const QString &v) { m_baseUrl = v; save(); }
     void setModel(const QString &v) { m_model = v; save(); }
     void setApiKey(const QString &v) { m_apiKey = v; save(); }
@@ -62,4 +72,7 @@ private:
     bool m_allowStateRead = true;
     bool m_allowTimeRecord = true;
     bool m_allowLongTermMemory = true;
+    bool m_wallpaperBlurEnabled = true;
+    int  m_wallpaperBlurRadius = 24;
+    double m_wallpaperBrightness = 0.5;
 };

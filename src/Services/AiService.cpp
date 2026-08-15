@@ -26,6 +26,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QPainterPath>
+#include <QLinearGradient>
 #include <QtConcurrent>
 #include <QFutureWatcher>
 #include <QTimer>
@@ -821,6 +822,196 @@ QString AiService::userAvatarPath()
 {
     QString p = ConfigService::instance().configDir() + "/user_avatar.png";
     return QFile::exists(p) ? p : QString();
+}
+
+// ---- custom wallpaper (blurred copy behind the right content pane) ----
+// two-pass box blur (approx Gaussian) — cheap, no extra Qt modules.
+static QImage boxBlur(const QImage &src, int radius)
+{
+    if (src.isNull()) return src;
+    const int r = qMax(1, radius);
+    const int div = 2 * r + 1;
+    QImage in = src.convertToFormat(QImage::Format_RGB32);
+    QImage out = in.copy();
+    const int w = in.width(), h = in.height();
+
+    // horizontal pass
+    for (int y = 0; y < h; ++y) {
+        QRgb *line = (QRgb *)in.scanLine(y);
+        QRgb *dst = (QRgb *)out.scanLine(y);
+        int rr = 0, gg = 0, bb = 0;
+        for (int x = -r; x <= r; ++x) {
+            const QRgb p = line[qBound(0, x, w - 1)];
+            rr += qRed(p); gg += qGreen(p); bb += qBlue(p);
+        }
+        for (int x = 0; x < w; ++x) {
+            dst[x] = qRgb(rr / div, gg / div, bb / div);
+            const QRgb pm = line[qBound(0, x - r, w - 1)];
+            const QRgb pp = line[qBound(0, x + r + 1, w - 1)];
+            rr += qRed(pp) - qRed(pm); gg += qGreen(pp) - qGreen(pm); bb += qBlue(pp) - qBlue(pm);
+        }
+    }
+    in = out;
+
+    // vertical pass
+    for (int x = 0; x < w; ++x) {
+        int rr = 0, gg = 0, bb = 0;
+        for (int y = -r; y <= r; ++y) {
+            const QRgb p = in.pixel(qBound(0, x, w - 1), qBound(0, y, h - 1));
+            rr += qRed(p); gg += qGreen(p); bb += qBlue(p);
+        }
+        for (int y = 0; y < h; ++y) {
+            out.setPixel(x, y, qRgb(rr / div, gg / div, bb / div));
+            const QRgb pm = in.pixel(x, qBound(0, y - r, h - 1));
+            const QRgb pp = in.pixel(x, qBound(0, y + r + 1, h - 1));
+            rr += qRed(pp) - qRed(pm); gg += qGreen(pp) - qGreen(pm); bb += qBlue(pp) - qBlue(pm);
+        }
+    }
+    return out;
+}
+
+QString AiService::wallpaperPath()
+{
+    const QString dir = ConfigService::instance().configDir();
+    const QString sharp = dir + "/wallpaper.png";
+    if (!QFile::exists(sharp)) return QString();
+    QString f;
+    if (ConfigService::instance().wallpaperBlurEnabled()) {
+        const QString blurred = dir + "/wallpaper_blur.png";
+        if (QFile::exists(blurred)) f = blurred;
+    }
+    if (f.isEmpty()) f = sharp;
+    // cache-buster fragment: Qt Image treats a changed URL as a new image and
+    // reloads the file — this is how a regenerated blur reaches the UI.
+    const qint64 stamp = QFileInfo(f).lastModified().toMSecsSinceEpoch();
+    return "file:///" + f.replace('\\', '/') + "#" + QString::number(stamp);
+}
+
+void AiService::regenerateWallpaper()
+{
+    const QString dir = ConfigService::instance().configDir();
+    const QString sharp = dir + "/wallpaper.png";
+    if (!QFile::exists(sharp)) return;
+    QImage img(sharp);
+    if (img.isNull()) return;
+    // downscale for the blur pass: the output is a soft background anyway, and a
+    // small image keeps the blur instant so dragging the slider never janks.
+    const int maxSide = 720;
+    if (qMax(img.width(), img.height()) > maxSide)
+        img = img.scaled(maxSide, maxSide, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    const int r = ConfigService::instance().wallpaperBlurRadius();
+    QImage blurred = r > 0 ? boxBlur(img, r) : img;
+    QFile::remove(dir + "/wallpaper_blur.png");
+    blurred.save(dir + "/wallpaper_blur.png", "PNG");
+}
+
+// debounced: batch rapid slider changes into one regeneration
+void AiService::applyWallpaperBlur()
+{
+    regenerateWallpaper();
+    emit wallpaperChanged();
+}
+
+bool AiService::wallpaperBlurEnabled() { return ConfigService::instance().wallpaperBlurEnabled(); }
+void AiService::setWallpaperBlurEnabled(bool v)
+{
+    ConfigService::instance().setWallpaperBlurEnabled(v);
+    if (!m_wallpaperDebounce) {
+        m_wallpaperDebounce = new QTimer(this);
+        m_wallpaperDebounce->setSingleShot(true);
+        m_wallpaperDebounce->setInterval(120);
+        connect(m_wallpaperDebounce, &QTimer::timeout, this, &AiService::applyWallpaperBlur);
+    }
+    m_wallpaperDebounce->start();
+}
+int AiService::wallpaperBlurRadius() { return ConfigService::instance().wallpaperBlurRadius(); }
+void AiService::setWallpaperBlurRadius(int r)
+{
+    ConfigService::instance().setWallpaperBlurRadius(r);
+    if (!m_wallpaperDebounce) {
+        m_wallpaperDebounce = new QTimer(this);
+        m_wallpaperDebounce->setSingleShot(true);
+        m_wallpaperDebounce->setInterval(120);
+        connect(m_wallpaperDebounce, &QTimer::timeout, this, &AiService::applyWallpaperBlur);
+    }
+    m_wallpaperDebounce->start();
+}
+
+double AiService::wallpaperBrightness()
+{
+    return ConfigService::instance().wallpaperBrightness();
+}
+
+// average luminance of an image in 0..1 (0 = dark, 1 = bright)
+static double averageLuminance(const QImage &img)
+{
+    if (img.isNull()) return 0.5;
+    const QImage small = img.scaled(48, 48, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    qint64 sum = 0;
+    const int n = small.width() * small.height();
+    if (n == 0) return 0.5;
+    for (int y = 0; y < small.height(); ++y) {
+        const QRgb *line = reinterpret_cast<const QRgb *>(small.constScanLine(y));
+        for (int x = 0; x < small.width(); ++x)
+            sum += qGray(line[x]);
+    }
+    return qBound(0.0, double(sum) / double(n) / 255.0, 1.0);
+}
+
+QString AiService::setWallpaper(const QString &srcPath)
+{
+    if (srcPath.isEmpty() || !QFile::exists(srcPath)) return wallpaperPath();
+    QImage img(srcPath);
+    if (img.isNull()) return wallpaperPath();
+    // keep the blur pass fast / memory sane on huge images
+    const int maxSide = 1600;
+    if (qMax(img.width(), img.height()) > maxSide)
+        img = img.scaled(maxSide, maxSide, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+    const QString dir = ConfigService::instance().configDir();
+    QDir().mkpath(dir);
+    const bool ok = img.save(dir + "/wallpaper.png", "PNG");
+    if (ok) {
+        ConfigService::instance().setWallpaperBrightness(averageLuminance(img));
+        regenerateWallpaper();
+        emit wallpaperChanged();
+    }
+    return wallpaperPath();
+}
+
+// built-in dark gradient wallpapers (on-brand neutrals — no blue/purple tint)
+QString AiService::setWallpaperPreset(int index)
+{
+    QLinearGradient g(0, 0, 0, 1); // vertical
+    switch (index) {
+    case 0:  g.setColorAt(0, QColor("#26282C")); g.setColorAt(1, QColor("#0E0F11")); break; // 炭黑
+    case 1:  g.setColorAt(0, QColor("#2B2C30")); g.setColorAt(1, QColor("#101113")); break; // 石墨灰
+    case 2:  g.setColorAt(0, QColor("#22302B")); g.setColorAt(1, QColor("#0C100E")); break; // 墨绿
+    case 3:  g.setColorAt(0, QColor("#1F2E33")); g.setColorAt(1, QColor("#0B0F11")); break; // 深青
+    default: return wallpaperPath();
+    }
+    QImage img(800, 500, QImage::Format_RGB32);
+    QPainter p(&img);
+    p.fillRect(img.rect(), g);
+    p.end();
+
+    const QString dir = ConfigService::instance().configDir();
+    QDir().mkpath(dir);
+    if (img.save(dir + "/wallpaper.png", "PNG")) {
+        ConfigService::instance().setWallpaperBrightness(averageLuminance(img));
+        regenerateWallpaper();
+        emit wallpaperChanged();
+    }
+    return wallpaperPath();
+}
+
+void AiService::removeWallpaper()
+{
+    const QString dir = ConfigService::instance().configDir();
+    bool removed = false;
+    if (QFile::exists(dir + "/wallpaper.png"))   { QFile::remove(dir + "/wallpaper.png");   removed = true; }
+    if (QFile::exists(dir + "/wallpaper_blur.png")) { QFile::remove(dir + "/wallpaper_blur.png"); removed = true; }
+    if (removed) emit wallpaperChanged();
 }
 
 // ---- AI-generated greeting (DeepSeek) ----
