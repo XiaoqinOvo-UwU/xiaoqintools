@@ -504,17 +504,25 @@ Page {
                                 wrapMode: Text.Wrap
                             }
                             ProgressBar {
+                                id: updateBar
                                 Layout.fillWidth: true
                                 visible: updateService.downloading
                                 from: 0; to: 100
                                 value: updateService.downloadProgress
-                                height: 5
-                                background: Rectangle { radius: 2; color: Theme.sliderTrack }
-                                contentItem: Rectangle {
-                                    implicitWidth: 1
-                                    implicitHeight: 5
-                                    radius: 2
-                                    color: Theme.sliderFill
+                                height: 6
+                                // NOTE: Qt6 does NOT auto-scale a custom
+                                // contentItem width to visualPosition — it gets
+                                // the FULL bar width (the bar was all-green).
+                                // Render the fill ourselves against the track.
+                                background: Rectangle { radius: 3; color: Theme.sliderTrack }
+                                contentItem: Item {
+                                    Rectangle {
+                                        width: parent.width * updateBar.visualPosition
+                                        height: parent.height
+                                        radius: 3
+                                        color: Theme.sliderFill
+                                        Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                    }
                                 }
                             }
                             RowLayout {
