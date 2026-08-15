@@ -9,6 +9,10 @@
 #include "MemoryRetriever.h"
 #include "MemoryImportanceEvaluator.h"
 #include "MemoryConflictManager.h"
+#include "AppAnalyzer.h"
+#include "DoNotDisturbManager.h"
+#include "ProactiveScore.h"
+#include "TopicGenerator.h"
 
 #include <QDir>
 #include <QFile>
@@ -31,7 +35,12 @@
 #include <QFutureWatcher>
 #include <QTimer>
 #include <QMap>
+#include <QRandomGenerator>
 #include <algorithm>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 // forward decls for helpers defined later in this file
 static QJsonObject readAiState();
@@ -51,6 +60,12 @@ AiService::AiService(QObject *parent)
     MemoryConflictManager::setLedgerPath(contactDir + "/memory_meta.json");
     ConversationStateManager::setStatePath(contactDir + "/conversation_state.json");
     ConversationStateManager::load(*m_convo);
+    // v3.9.2: activity memory lives in its own file, NOT memory.json (personality stays clean)
+    m_activityMemory.setPath(ConfigService::instance().configDir() + "/activity_memory.json");
+    m_activityMemory.pruneOlderThan(30); // keep ~30 days
+    // v3.9.2 phase 3: mood trend (config dir) + relationship state (contact dir)
+    m_moodTrend.setPath(ConfigService::instance().configDir() + "/mood_trend.json");
+    m_relationshipState.setPath(contactDir + "/relationship_state.json");
 }
 
 QString AiService::memoryPath() const
@@ -127,6 +142,7 @@ QString AiService::jsonSet(const QString &json, const QString &key, const QStrin
 // ---- session recording ----
 void AiService::recordSessionStart()
 {
+    applyMemoryDecay(); // old memories fade into short gists (once per launch)
     if (!ConfigService::instance().allowTimeRecord()) return;
     QString mem = readMemory();
     QString today = QDateTime::currentDateTime().toString("yyyy-MM-dd");
@@ -205,10 +221,58 @@ void AiService::stopActivityMonitor()
     flushActivityToMemory();
 }
 
+// executable name of the foreground window (win32), "" on failure — used to
+// classify via AppAnalyzer by process, not just window title.
+static QString foregroundProcessExe()
+{
+#ifdef Q_OS_WIN
+    HWND hwnd = GetForegroundWindow();
+    if (!hwnd) return QString();
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (!pid) return QString();
+    HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!h) return QString();
+    wchar_t buf[1024] = {0};
+    DWORD len = 1024;
+    BOOL ok = QueryFullProcessImageNameW(h, 0, buf, &len);
+    CloseHandle(h);
+    if (!ok) return QString();
+    return QFileInfo(QString::fromWCharArray(buf, len)).fileName().toLower();
+#else
+    return QString();
+#endif
+}
+
 void AiService::recordActivitySample()
 {
     QString app = foregroundApp();
-    if (app.isEmpty()) return;
+    QString exe = foregroundProcessExe();
+    if (app.isEmpty() || AppAnalyzer::isExcluded(exe, app)) {
+        m_fgApp.clear();
+        return;
+    }
+    qint64 now = QDateTime::currentDateTime().toMSecsSinceEpoch();
+    if (m_fgApp != app) {           // foreground changed -> restart the session clock
+        m_fgApp = app;
+        m_fgSinceMs = now;
+    }
+    // v3.9.2: detect "just finished a task" — leaving gaming/coding for
+    // browsing/chatting is a natural moment to say something.
+    {
+        AppAnalysis a = AppAnalyzer::analyze(exe, app, 0);
+        if (!a.isSystemNoise && !m_lastFgCategory.isEmpty() && m_lastFgCategory != a.category) {
+            const bool wasWork = (m_lastFgCategory == "gaming" || m_lastFgCategory == "creating"
+                                  || m_lastFgCategory == "terminal");
+            const bool nowRelax = (a.category == "browsing" || a.category == "chatting"
+                                   || a.category == "media" || a.category == "other");
+            if (wasWork && nowRelax) {
+                m_justFinishedTask = true;
+                m_justFinishedTaskAtMs = now;
+            }
+        }
+        m_lastFgCategory = a.category;
+    }
     m_appMinutes[app] = m_appMinutes.value(app) + 1;
     // persist every 10 minutes so a crash doesn't lose everything
     if ((m_appMinutes.size() % 10) == 0 || m_appMinutes.value(app) >= 10)
@@ -218,59 +282,47 @@ void AiService::recordActivitySample()
 void AiService::flushActivityToMemory()
 {
     if (m_appMinutes.isEmpty()) return;
-    QString mem = readMemory();
-    QJsonDocument d = QJsonDocument::fromJson(mem.toUtf8());
-    QJsonObject o = d.isObject() ? d.object() : QJsonObject();
-
-    // merge into "appUsageToday" as "title: minutes" pairs
-    QJsonObject usage = o.value("appUsageToday").toObject();
-    for (auto it = m_appMinutes.constBegin(); it != m_appMinutes.constEnd(); ++it) {
-        int existing = usage.value(it.key()).toInt();
-        usage.insert(it.key(), existing + it.value());
-    }
-    o.insert("appUsageToday", usage);
-    // keep only today's usage (reset key each day)
-    o.insert("appUsageDate", QDate::currentDate().toString("yyyy-MM-dd"));
-    writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
+    // push accumulated minutes into the SEPARATE activity memory (never memory.json)
+    for (auto it = m_appMinutes.constBegin(); it != m_appMinutes.constEnd(); ++it)
+        m_activityMemory.recordMinutes(it.key(), it.value());
+    m_activityMemory.setUptime(uptimeText());
+    m_activityMemory.pruneOlderThan(30); // keep ~30 days
     m_appMinutes.clear();
 }
 
 QString AiService::activitySummary()
 {
-    QString mem = readMemory();
-    QJsonDocument d = QJsonDocument::fromJson(mem.toUtf8());
-    QJsonObject o = d.isObject() ? d.object() : QJsonObject();
-    QJsonObject usage = o.value("appUsageToday").toObject();
-    if (usage.isEmpty()) return "（还没有检测到使用数据）";
-
-    // normalize common apps to friendly labels, then pick top 3 by minutes
-    QMap<int, QString> sorted; // minutes -> label (sorted ascending)
-    for (auto it = usage.constBegin(); it != usage.constEnd(); ++it) {
-        QString label = it.key();
-        int mins = it.value().toInt();
-        if (mins < 3) continue; // ignore < 3 min blips
-        QString lower = label.toLower();
-        if (lower.contains("edge") || lower.contains("chrome") || lower.contains("firefox"))
-            label = "浏览器";
-        else if (lower.contains("minecraft") || lower.contains("javaw") || lower.contains("java"))
-            label = "Minecraft";
-        else if (lower.contains("apex") || lower.contains("r5apex"))
-            label = "Apex 英雄";
-        else if (lower.contains("微信") || lower.contains("qq") || lower.contains("discord"))
-            label = "聊天软件";
-        else if (lower.contains("code") || lower.contains("visual studio"))
-            label = "写代码";
-        sorted.insert(mins, label);
-    }
-    if (sorted.isEmpty()) return "（今天还没怎么用电脑）";
-    QStringList top;
-    auto it = sorted.constEnd();
-    for (int i = 0; i < 3 && it != sorted.constBegin(); ++i) {
-        --it;
-        top << QString("%1（%2 分钟）").arg(it.value()).arg(it.key());
-    }
-    return "今天大部分时间在：" + top.join("、");
+    QString top = m_activityMemory.todayTopApps(3, true);
+    if (top.isEmpty()) return "（今天还没怎么用电脑）";
+    return "今天大部分时间在：" + top;
 }
+
+// top-used app today (excl. system/proxy/explorer) — "当前运行最久"
+QString AiService::longestRunningAppToday()
+{
+    return m_activityMemory.todayTopApps(1, true);
+}
+
+// live "you're using X, for ~Y minutes" from the current foreground session
+QString AiService::currentForegroundSessionText()
+{
+    if (m_fgApp.isEmpty() || m_fgSinceMs <= 0) return QString();
+    qint64 mins = (QDateTime::currentDateTime().toMSecsSinceEpoch() - m_fgSinceMs) / 60000;
+    if (mins < 1) return QString();
+    return QString("你正在使用 %1，已经用了约 %2 分钟。").arg(m_fgApp).arg(mins);
+}
+
+// yesterday's archived top apps (from activity_memory.json)
+QString AiService::yesterdayActivitySummary()
+{
+    QString top = m_activityMemory.yesterdayTopApps(3, true);
+    return top.isEmpty() ? QString() : "昨天你主要用了：" + top;
+}
+
+// ---- v3.9.2: silence-gate accessors ----
+bool AiService::isDoNotDisturb() { return !m_dndReason.isEmpty(); }
+QString AiService::doNotDisturbReason() { return m_dndReason; }
+int AiService::lastProactiveScore() { return m_lastProactiveScore; }
 
 // ---- novel edit counting (scan C:\AI库\小说 for yesterday-modified .md files) ----
 static int countNovelEditsYesterday()
@@ -348,6 +400,13 @@ QString AiService::greeting()
     if (!up.isEmpty())
         lines << up;
 
+    // v3.9.1: sometimes bring up yesterday's top apps to start a topic (随机)
+    if (QRandomGenerator::global()->bounded(100) < 35) {
+        QString y = yesterdayActivitySummary();
+        if (!y.isEmpty())
+            lines << y;
+    }
+
     if (lines.size() == 1) // nothing remembered yet
         lines << "今天也要元气满满哦 Ovo";
 
@@ -396,9 +455,6 @@ QString AiService::memoryReport()
 }
 
 // ---- system uptime (Windows) ----
-#ifdef Q_OS_WIN
-#include <windows.h>
-#endif
 QString AiService::uptimeText()
 {
 #ifdef Q_OS_WIN
@@ -535,6 +591,53 @@ qint64 AiService::lastInputMs()
 //          -> TopicSelector (rankTopics) -> PromptBuilder -> DeepSeek
 void AiService::idleChat()
 {
+    // ---- v3.9.2: silence gate (DoNotDisturb + ProactiveScore) ----
+    // Whether to talk is decided by real desktop state + a deterministic
+    // formula — NEVER by the LLM. Stay silent while gaming / fullscreen /
+    // meeting / deep-work, or when the proactive score is below 50.
+    if (!ConfigService::instance().allowStateRead() || !ConfigService::instance().allowTimeRecord())
+        return;
+    {
+        const QString exe = foregroundProcessExe();
+        const QString fgTitle = foregroundApp();
+        AppAnalysis fg = AppAnalyzer::analyze(exe, fgTitle, 0);
+        const bool fullscreen = isFullscreenGame();
+        const bool gameProc = isGameRunning() || fg.category == "gaming";
+        DoNotDisturbState dnd = DoNotDisturbManager::evaluate(fg.category, exe, fullscreen, gameProc);
+        if (dnd.enabled) {
+            m_dndReason = dnd.reason;
+            emit doNotDisturbChanged();
+            return; // silent
+        }
+        m_dndReason.clear();
+        emit doNotDisturbChanged();
+
+        // "user refused" cooldown: counts for 30 minutes
+        if (m_refusedAtMs > 0 &&
+            QDateTime::currentDateTime().toMSecsSinceEpoch() - m_refusedAtMs > 30 * 60 * 1000)
+            m_userJustRefused = false;
+        // "just finished a task" stays valid for ~45 min
+        if (m_justFinishedTaskAtMs > 0 &&
+            QDateTime::currentDateTime().toMSecsSinceEpoch() - m_justFinishedTaskAtMs > 45 * 60 * 1000)
+            m_justFinishedTask = false;
+
+        int hour = QTime::currentTime().hour();
+        ProactiveInput in;
+        in.idleMs = lastInputMs();
+        in.lateNight = (hour >= 23 || hour < 5);
+        in.gaming = fg.category == "gaming";
+        in.coding = (fg.category == "creating" || fg.category == "terminal");
+        in.fullscreen = fullscreen;
+        in.justRefused = m_userJustRefused;
+        in.justFinishedTask = m_justFinishedTask;
+        const QString ce = m_convo->userEmotion;
+        in.userMoodLow = (ce == "tired" || ce == "stressed" || ce == "sad" || ce == "lonely");
+
+        m_lastProactiveScore = ProactiveScore::compute(in);
+        m_justFinishedTask = false; // consumed
+        if (m_lastProactiveScore < 50) return; // stay quiet
+    }
+
     QString user = ConfigService::instance().userName();
     QString ai = ContactService::instance().currentName();
     QString fg = foregroundApp();         // cheap win32 call
@@ -546,7 +649,6 @@ void AiService::idleChat()
     QStringList unfinished = unfinishedTopicsText(5).split('\n', Qt::SkipEmptyParts);
     QStringList interests = interestsText(5).split('\n', Qt::SkipEmptyParts);
     QStringList events = eventMemoryText(4).split('\n', Qt::SkipEmptyParts);
-    QStringList recentLines = recent.split('\n', Qt::SkipEmptyParts);
     QStringList userFacts;
     {
         // user's own recent stated facts (verified)
@@ -568,6 +670,16 @@ void AiService::idleChat()
             m_ctx->addSystemData("用户当前前台窗口是 " + fg, 0.90, {"foreground"});
             sysFacts << QString("- [system_data] 用户当前前台窗口是 %1").arg(fg);
         }
+        // v3.9.1: current session + today's top apps give the AI depth to
+        // start a topic ("你用了X挺久了吧" / "今天Y玩得不少") without guessing.
+        QString cur = currentForegroundSessionText();
+        if (!cur.isEmpty()) {
+            m_ctx->addSystemData(cur, 0.90, {"foreground"});
+            sysFacts << QString("- [system_data] %1").arg(cur);
+        }
+        QString longest = longestRunningAppToday();
+        if (!longest.isEmpty())
+            sysFacts << QString("- [system_data] 今天用得最多：%1").arg(longest);
     }
 
     // ---- MemoryRetriever: recall memories relevant to the current situation ----
@@ -584,9 +696,11 @@ void AiService::idleChat()
         memBlock = lines.join("\n");
     }
 
-    // ---- TopicSelector: ranked candidates instead of a flat prompt ----
-    QList<ContextManager::TopicScore> topics = m_ctx->rankTopics(
-        unfinished, interests, recentLines, events, userFacts);
+    // ---- TopicGenerator: 10 candidates from real sources, scored on
+    //      relevance/freshness/relationship/interruptCost; pick the top 3 ----
+    const double interruptPenalty = (state == "active" || state == "coding") ? 0.4 : 0.0;
+    QList<TopicCandidate> topics = TopicGenerator::generate(
+        userFacts, unfinished, interests, events, sysFacts, interruptPenalty);
     QStringList topTopics;
     int nt = qMin(topics.size(), 3);
     for (int i = 0; i < nt; ++i)
@@ -1036,8 +1150,16 @@ void AiService::generateGreeting()
 
     QString prompt = "你是" + ai + "，性格" + personality + "。用户叫" + user + "。"
                      "现在是" + period + "。请用1-3句话自然地问候用户，要像朋友一样，带一点可爱。"
-                     "你可以参考这些记忆，但不要生硬罗列：\n" + mem + "\n" + up
-                     + "\n只输出问候语本身，不要任何前缀。";
+                     "你可以参考这些记忆，但不要生硬罗列：\n" + mem + "\n" + up;
+
+    // v3.9.1: randomly surface yesterday's top apps so the greeting can pick a
+    // natural topic ("你昨天写了挺久代码？") — 加入随机性，不是每次都说。
+    if (QRandomGenerator::global()->bounded(100) < 35) {
+        QString y = yesterdayActivitySummary();
+        if (!y.isEmpty())
+            prompt += "\n昨天用户的使用情况：" + y + "（可以自然提起，也可不聊）";
+    }
+    prompt += "\n只输出问候语本身，不要任何前缀。";
 
     auto *watcher = new QFutureWatcher<QString>(this);
     connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
@@ -1275,6 +1397,95 @@ void AiService::appendNote(const QString &note)
     // ongoing topic and emotional state.
 }
 
+// ---- memory decay: older memories shrink into a short gist (只记得大概) ----
+// Notes carry a trailing "（yyyy-MM-dd HH:mm）" stamp. ≥30 days -> first clause
+// only; ≥60 days -> first ~18 chars. Nothing is deleted, just shortened.
+void AiService::applyMemoryDecay()
+{
+    QString mem = readMemory();
+    QJsonDocument d = QJsonDocument::fromJson(mem.toUtf8());
+    if (!d.isObject()) return;
+    QJsonObject o = d.object();
+    QJsonArray notes = o.value("notes").toArray();
+    bool changed = false;
+    QDateTime now = QDateTime::currentDateTime();
+    for (int i = 0; i < notes.size(); ++i) {
+        QString s = notes.at(i).toString();
+        int lp = s.lastIndexOf(QStringLiteral("（"));
+        int rp = s.lastIndexOf(QStringLiteral("）"));
+        QDateTime ts;
+        if (lp > 0 && rp > lp)
+            ts = QDateTime::fromString(s.mid(lp + 1, rp - lp - 1), "yyyy-MM-dd HH:mm");
+        if (!ts.isValid()) continue;
+        qint64 days = ts.daysTo(now);
+        QString shortNote;
+        if (days >= 60) {
+            QString gist = s.left(lp).simplified();
+            if (gist.size() > 18) gist = gist.left(18) + "…";
+            shortNote = gist + "（记忆已随时间变淡，只记得大概）";
+        } else if (days >= 30) {
+            QString gist = s.left(lp).simplified();
+            if (gist.size() > 30) gist = gist.left(30) + "…";
+            shortNote = gist + "（" + ts.toString("yyyy-MM-dd") + "，细节已淡忘）";
+        }
+        if (!shortNote.isEmpty() && shortNote != s) {
+            notes[i] = shortNote;
+            changed = true;
+        }
+    }
+    if (changed) {
+        o.insert("notes", notes);
+        writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
+        qWarning("[memory] decay applied (older notes shortened)");
+    }
+}
+
+// ---- desktop-sensing triggers (v3.9.1) ----
+// When the user asks about the desktop ("猜我在干嘛"), asks how long something
+// has been used, or shows care-worthy mood — force a real-time desktop read.
+bool AiService::matchesDesktopTriggers(const QString &text)
+{
+    if (text.contains("在干嘛") || text.contains("在干什么") || text.contains("在做什么"))
+        return true;
+    if (text.contains("猜") && (text.contains("干嘛") || text.contains("干") || text.contains("做") || text.contains("什么")))
+        return true;
+    if (text.contains("是不是在玩") || text.contains("是不是在打") || text.contains("在玩什么") || text.contains("在打什么"))
+        return true;
+    if (text.contains("用了多久") || text.contains("多长时间") || text.contains("多久了"))
+        return true;
+    if (text.contains("好累") || text.contains("累了") || text.contains("困了") ||
+        text.contains("好烦") || text.contains("烦死") || text.contains("压力好大") ||
+        text.contains("好难过") || text.contains("好伤心"))
+        return true;
+    return false;
+}
+
+// prompt-ready real-time desktop block (only what the OS actually detected).
+// `force` includes the raw foreground window; otherwise session + top-app only.
+QString AiService::desktopStateBlock(bool force)
+{
+    if (!ConfigService::instance().allowStateRead())
+        return "（用户关闭了状态感知，我不知道ta此刻在用电脑做什么，不要猜）";
+    QStringList parts;
+    QString cur = currentForegroundSessionText();
+    if (!cur.isEmpty()) parts << cur;
+    QString longest = longestRunningAppToday();
+    if (!longest.isEmpty()) parts << "今天用得最多：" + longest;
+    if (force) {
+        // AppAnalyzer turns the raw process/window into an LLM-safe semantic
+        // fact ("用户正在玩 Minecraft" / "用户正在使用浏览器" ...). The model
+        // never sees the raw exe to guess from.
+        AppAnalysis a = AppAnalyzer::analyze(foregroundProcessExe(), foregroundApp(), 0);
+        if (!a.isSystemNoise && !a.content.isEmpty())
+            parts << a.content;
+        qint64 idle = lastInputMs();
+        if (idle >= 15 * 60 * 1000)
+            parts << "（已经 " + QString::number(idle / 60000) + " 分钟没有操作）";
+    }
+    if (parts.isEmpty()) return QString();
+    return "【实时桌面信息】（系统检测，可作为已验证事实）\n" + parts.join("\n");
+}
+
 // ---- seed recent-chat context from the UI (SQLite history on page open) ----
 void AiService::setChatHistory(const QString &history)
 {
@@ -1349,6 +1560,22 @@ void AiService::sendMessage(const QString &text)
     for (const QString &id : corrected)
         m_ctx->rejectFact(id);
 
+    // v3.9.2: user "refused a chat" flag — feeds ProactiveScore (-30) so the
+    // AI backs off for a while instead of pestering.
+    {
+        static const QStringList refuseWords = {
+            "不用了", "别聊", "不想聊", "别烦", "在忙", "忙呢", "没空",
+            "别说话", "闭嘴", "等会再说", "下次再说", "先不聊", "安静",
+        };
+        for (const QString &w : refuseWords) {
+            if (text.contains(w)) {
+                m_userJustRefused = true;
+                m_refusedAtMs = QDateTime::currentDateTime().toMSecsSinceEpoch();
+                break;
+            }
+        }
+    }
+
     // ---- Context Manager: ingest real system data as verified facts ----
     if (ConfigService::instance().allowStateRead()) {
         QString state = analyzeUserState();
@@ -1407,6 +1634,24 @@ void AiService::sendMessage(const QString &text)
         }
     }
 
+    // v3.9.2: activity memory — short-term usage facts, SEPARATE from the
+    // personality notes above. Low importance so UserMemory always wins; they
+    // only surface when the current message/topic is actually about usage.
+    {
+        const QString todayTop = m_activityMemory.todayTopApps(3, true);
+        if (!todayTop.isEmpty())
+            m_ctx->addMemoryFact("用户今天主要使用了：" + todayTop,
+                                 MemoryKind::MemorySummary, {"activity_memory"}, 0.35, 0.0);
+        const QString yTop = m_activityMemory.yesterdayTopApps(3, true);
+        if (!yTop.isEmpty())
+            m_ctx->addMemoryFact("昨天用户主要使用了：" + yTop,
+                                 MemoryKind::MemorySummary, {"activity_memory"}, 0.30, 0.0);
+        const QString up = m_activityMemory.todayUptime();
+        if (!up.isEmpty())
+            m_ctx->addMemoryFact("电脑开机时长：" + up,
+                                 MemoryKind::SystemData, {"activity_memory"}, 0.30, 0.0);
+    }
+
     // companion: auto-capture emotionally significant moments as event memory
     {
         static const struct { const char *kw; const char *type; const char *label; } moods[] = {
@@ -1433,6 +1678,33 @@ void AiService::sendMessage(const QString &text)
     // 3) hypotheses (inference, question-form only)
     // 4) user state (system_data) and AI state (mood/energy) kept apart
     QString emotion = inferUserEmotion(text);
+
+    // ---- v3.9.2 phase 3: record into mood trend + relationship state ----
+    m_moodTrend.record(emotion);
+    m_relationshipState.update(emotion, m_convo->topic, text);
+
+    // ---- v3.9.1: desktop-sensing triggers ----
+    // 1) "猜我在干嘛 / 用了多久 / 关心类" -> force a real-time desktop read.
+    // 2) mood changed vs the previous turn -> read the desktop to help the AI
+    //    infer the cause (e.g. tired because of gaming vs something else).
+    bool forceDesktop = matchesDesktopTriggers(text);
+    QString prevEmotion = m_lastEmotion;
+    m_lastEmotion = emotion;
+    bool moodShifted = !prevEmotion.isEmpty() && prevEmotion != emotion && emotion != "normal";
+    QString desktopInfo;
+    QString desktopHint;
+    if (forceDesktop || moodShifted) {
+        desktopInfo = desktopStateBlock(forceDesktop);
+        if (forceDesktop && desktopInfo.isEmpty())
+            desktopInfo = "（当前没有检测到桌面信息）";
+        if (forceDesktop)
+            desktopHint = "用户询问你在干什么/用了多久，可用【实时桌面信息】里的内容回答（视为已验证事实），"
+                          "但只能使用其中列出的内容，不能额外编造。";
+        else if (moodShifted)
+            desktopHint = QString("用户这次聊天情绪是「%1」，上次是「%2」，可从【实时桌面信息】判断"
+                                  "是否因为打游戏/做别的导致心情变化，只能引用其中内容。").arg(emotion, prevEmotion);
+    }
+
     QString strategy;
     if (emotion == "tired")
         strategy = "用户现在比较疲惫，语气温柔体贴，少提问题多安慰，可以建议休息，别啰嗦。";
@@ -1450,6 +1722,9 @@ void AiService::sendMessage(const QString &text)
     // FactFilter: code-level guarantee of what can be stated as fact.
     // Score memories against the current message + conversation topic.
     QString factsText = m_ctx->factsSection(12, text, m_convo->topic);
+    // v3.9.1: real-time desktop info becomes an allowed fact for this turn only
+    if (!desktopInfo.isEmpty())
+        factsText += "\n" + desktopInfo;
     // debug log: how memories were recalled for this message
     qWarning("%s", qUtf8Printable(m_ctx->recallReport(text, m_convo->topic)));
     // v3.9: track which memories were actually useful this turn
@@ -1494,7 +1769,11 @@ void AiService::sendMessage(const QString &text)
         + "当前策略：" + strategy + "\n"
         + "情绪表达：回复开头用一个情绪令牌表示你此刻的情绪，例如 <|ACT {\"emotion\":\"happy\"}|>；"
           "可用：happy, sad, angry, think, surprised, awkward, question, curious, neutral。令牌不显示给用户。\n"
-        + "【我此刻的状态（AI 自身状态，与用户事实无关）】" + aiStateJson();
+        + "【我此刻的状态（AI 自身状态，与用户事实无关）】" + aiStateJson()
+        + (desktopHint.isEmpty() ? QString() : ("\n【本回合额外指示】" + desktopHint))
+        // v3.9.2 phase 3: soft mood-trend wording + current relationship state
+        + "\n" + m_moodTrend.block()
+        + "\n" + m_relationshipState.block();
 
     // recent conversation history so the AI can see what was said before
     QString historyBlock;

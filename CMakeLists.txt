@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(XiaoQinTools VERSION 3.8.8 LANGUAGES CXX)
+project(XiaoQinTools VERSION 3.9.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,6 +58,20 @@ set(APP_SOURCES
     src/Services/StatsService.cpp
     src/Services/ContactService.h
     src/Services/ContactService.cpp
+    src/Services/AppAnalyzer.h
+    src/Services/AppAnalyzer.cpp
+    src/Services/ActivityMemory.h
+    src/Services/ActivityMemory.cpp
+    src/Services/DoNotDisturbManager.h
+    src/Services/DoNotDisturbManager.cpp
+    src/Services/ProactiveScore.h
+    src/Services/ProactiveScore.cpp
+    src/Services/MoodTrend.h
+    src/Services/MoodTrend.cpp
+    src/Services/RelationshipState.h
+    src/Services/RelationshipState.cpp
+    src/Services/TopicGenerator.h
+    src/Services/TopicGenerator.cpp
 )
 
 qt_add_executable(XiaoQinTools WIN32

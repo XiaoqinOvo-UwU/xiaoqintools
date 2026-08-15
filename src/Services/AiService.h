@@ -3,6 +3,9 @@
 #include <QString>
 #include <QHash>
 #include <QJsonArray>
+#include "ActivityMemory.h"
+#include "MoodTrend.h"
+#include "RelationshipState.h"
 class QTimer;
 class ContextManager;
 struct ConversationState;
@@ -139,6 +142,16 @@ public:
     Q_INVOKABLE void stopActivityMonitor();
     Q_INVOKABLE QString activitySummary();     // "今天大部分时间在用什么" (from short-term memory)
 
+    // ---- batch 4: desktop-sensing triggers + usage depth (v3.9.1) ----
+    Q_INVOKABLE QString longestRunningAppToday();      // top-used app today (excl. proxy/explorer/system)
+    Q_INVOKABLE QString currentForegroundSessionText();// "你正在使用 X，已经用了约 Y 分钟"
+    Q_INVOKABLE QString yesterdayActivitySummary();    // yesterday's archived top apps (with minutes)
+
+    // ---- batch 5: silence / proactive gates (v3.9.2) ----
+    Q_INVOKABLE bool isDoNotDisturb();                 // proactive chat banned right now
+    Q_INVOKABLE QString doNotDisturbReason();          // "gaming"/"fullscreen"/"meeting"/"work"
+    Q_INVOKABLE int lastProactiveScore();              // last computed proactive score (debug/UI)
+
     // ---- companion context management (facts / corrections) ----
     Q_INVOKABLE void notifyUserCorrection();   // UI hint: last AI claim was wrong (debug)
     Q_INVOKABLE int  correctionCount();        // how many corrections this session
@@ -154,6 +167,7 @@ signals:
     void emotionSignal(QString emotion, qreal intensity); // AIRI-style ACT token playback
     void profileChanged();                               // name/avatar/persona changed -> refresh UI
     void wallpaperChanged();                             // custom wallpaper set/removed -> refresh backdrop
+    void doNotDisturbChanged();                          // DND state changed (UI may show a badge)
 
 private:
     QString memoryPath() const;
@@ -178,6 +192,30 @@ private:
     void flushActivityToMemory();     // write the accumulated usage into memory
     QHash<QString, int> m_appMinutes; // app title -> minutes (today)
     QTimer *m_monitorTimer = nullptr;
+
+    // ---- v3.9.1: desktop-sensing internals ----
+    QString desktopStateBlock(bool force);            // prompt-ready real-time desktop info
+    bool matchesDesktopTriggers(const QString &text); // "猜在干嘛 / 用多久 / 关心类"
+    void applyMemoryDecay();                          // old notes -> short gist (只记得大概)
+    QString m_fgApp;              // currently-tracked foreground app
+    qint64 m_fgSinceMs = 0;       // epoch ms when m_fgApp became foreground
+    QString m_lastEmotion;        // previous turn's emotion (mood-change detection)
+
+    // v3.9.2: short-term usage memory (separate file, not personality memory)
+    ActivityMemory m_activityMemory;
+
+    // v3.9.2: silence / proactive gates
+    QString m_dndReason;              // "" when not do-not-disturb
+    int m_lastProactiveScore = 0;     // last computed proactive score
+    bool m_userJustRefused = false;   // user recently declined a chat
+    qint64 m_refusedAtMs = 0;         // when they refused (cooldown)
+    QString m_lastFgCategory;         // previous foreground category (task-finish detection)
+    bool m_justFinishedTask = false;  // just switched from work/gaming to relaxing
+    qint64 m_justFinishedTaskAtMs = 0;// when that happened
+
+    // v3.9.2: mood trend + relationship state (phase 3)
+    MoodTrend m_moodTrend;            // last-10-chat emotion statistics
+    RelationshipState m_relationshipState; // relationship_state.json
 
     // companion context: short-term fact cache + correction ledger
     ContextManager *m_ctx = nullptr;
