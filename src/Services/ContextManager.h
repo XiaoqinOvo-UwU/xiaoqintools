@@ -21,7 +21,9 @@ public:
     // ---- collection ----
     void addUserMessage(const QString &text, const QStringList &tags = {});
     void addSystemData(const QString &content, double confidence, const QStringList &tags = {});
-    void addMemoryFact(const QString &content, MemoryKind kind, const QStringList &tags = {});
+    void addMemoryFact(const QString &content, MemoryKind kind, const QStringList &tags = {},
+                       double importance = -1.0, double usage = 0.0,
+                       MemoryStatus status = MemoryStatus::Active);
     void addHypothesis(const QString &content, double confidence, const QStringList &tags = {});
 
     void addFact(const Fact &f);                 // generic insert (dedupe by id)

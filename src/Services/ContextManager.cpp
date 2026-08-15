@@ -63,7 +63,8 @@ void ContextManager::addSystemData(const QString &content, double confidence, co
     addFact(f);
 }
 
-void ContextManager::addMemoryFact(const QString &content, MemoryKind kind, const QStringList &tags)
+void ContextManager::addMemoryFact(const QString &content, MemoryKind kind, const QStringList &tags,
+                                   double importance, double usage, MemoryStatus status)
 {
     Fact f;
     f.id = nextId("mem");
@@ -72,6 +73,9 @@ void ContextManager::addMemoryFact(const QString &content, MemoryKind kind, cons
     f.memKind = kind;
     f.confidence = MemoryEntry::kindConfidence(kind); // USER_FACT 1.0 ... SUMMARY 0.5
     f.tags = tags;
+    f.importance = importance;                 // -1 = use kind default at scoring
+    f.usageFrequency = usage;
+    f.status = status;                         // deprecated/replaced facts are excluded by isFact()
     addFact(f);
 }
 
@@ -126,7 +130,8 @@ QList<Fact> ContextManager::retrieveMemories(const QString &userMsg, const QStri
         Fact scored = f;
         scored.retrievalScore = MemoryRetriever::score(
             f.content, f.memKind, f.timestamp, f.tags.contains("memory_event"),
-            userMsg, topic);
+            userMsg, topic, f.usageFrequency,
+            f.importance >= 0.0 ? f.importance : -1.0);
         out.append(scored);
     }
     // sort by score desc, take top `max`
@@ -312,8 +317,10 @@ QList<ContextManager::TopicScore> ContextManager::rankTopics(
 // ---- prompt sections ----
 QString ContextManager::factsSection(int maxFacts, const QString &userMsg, const QString &topic) const
 {
-    // source priority: system_data (real-time truth) > user_message (stated) > memory
-    // and never flood the block with raw user quotes — cap user_message.
+    // v3.9: distinct labeled blocks so the AI never confuses certainty levels.
+    //   【确定事实】 system_data (real-time) > user_message (stated) > USER_FACT/HABIT memory
+    //   【历史经历】 MEMORY_EVENT (shared experiences)
+    //   【AI理解】   INTERPRETATION (LLM summaries — low trust, reference only)
     QList<Fact> sys, usr;
     for (const Fact &f : m_facts) {
         if (!f.isFact()) continue;
@@ -326,30 +333,38 @@ QString ContextManager::factsSection(int maxFacts, const QString &userMsg, const
     // memory: reuse the score-based retriever (single source of truth for ranking)
     QList<Fact> mem = retrieveMemories(userMsg, topic, 20);
 
-    QStringList lines;
+    QStringList verified, history, interpreted;
+    for (const Fact &f : mem) {
+        if (f.memKind == MemoryKind::MemoryEvent)
+            history << QString("- [MEMORY_EVENT] %1").arg(f.content);
+        else if (f.memKind == MemoryKind::MemorySummary)
+            interpreted << QString("- [INTERPRETATION] %1").arg(f.content);
+        else
+            verified << QString("- [%1] %2").arg(f.memKindName(), f.content);
+    }
+
     int budget = maxFacts;
     auto take = [&](QList<Fact> &list, int max) {
         int n = qMin((int)list.size(), max);
-        for (int i = 0; i < n && budget > 0; ++i, --budget) {
-            const Fact &f = list.at(i);
-            // show memory source type so the AI knows how reliable it is
-            if (f.source == FactSource::Memory)
-                lines << QString("- [%1] %2").arg(f.memKindName(), f.content);
-            else
-                lines << QString("- [%1] %2").arg(f.sourceName(), f.content);
-        }
+        for (int i = 0; i < n && budget > 0; ++i, --budget)
+            verified << QString("- [%1] %2").arg(list.at(i).sourceName(), list.at(i).content);
     };
-    // memory facts are the companion's long-term knowledge — give them the
-    // largest share. system data up to 3, user up to 2, rest goes to memory.
+    // system data up to 3, user up to 2, rest goes to verified memory
     take(sys, 3);
     take(usr, 2);
-    take(mem, maxFacts);
-    // if budget still remains and more system/user facts exist, top up
     if (budget > 0) {
         take(sys, maxFacts);
         take(usr, maxFacts);
     }
-    return lines.join("\n");
+
+    QStringList blocks;
+    if (!verified.isEmpty())
+        blocks << QString("【确定事实】（只有这里的内容可以说成事实）\n") + verified.join("\n");
+    if (!history.isEmpty())
+        blocks << QString("【历史经历】（共同经历/发生过的事，不是当前状态）\n") + history.join("\n");
+    if (!interpreted.isEmpty())
+        blocks << QString("【AI理解】（AI 的总结，可信度低，只能以“感觉/好像”委婉提起，不可当事实）\n") + interpreted.join("\n");
+    return blocks.join("\n\n");
 }
 
 QString ContextManager::hypothesesSection(int maxHypotheses) const

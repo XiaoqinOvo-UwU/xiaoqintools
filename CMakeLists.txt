@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(XiaoQinTools VERSION 3.8.0 LANGUAGES CXX)
+project(XiaoQinTools VERSION 3.8.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,13 +39,21 @@ set(APP_SOURCES
     src/Services/FactModel.h
     src/Services/MemoryRetriever.h
     src/Services/MemoryRetriever.cpp
+    src/Services/MemoryImportanceEvaluator.h
+    src/Services/MemoryImportanceEvaluator.cpp
+    src/Services/MemoryConflictManager.h
+    src/Services/MemoryConflictManager.cpp
     src/Services/ConversationState.h
+    src/Services/ConversationStateManager.h
+    src/Services/ConversationStateManager.cpp
     src/Services/ContextManager.h
     src/Services/ContextManager.cpp
     src/Services/FactFilter.h
     src/Services/FactFilter.cpp
     src/Services/ResponseValidator.h
     src/Services/ResponseValidator.cpp
+    src/Services/ResponseRepair.h
+    src/Services/ResponseRepair.cpp
     src/Services/StatsService.h
     src/Services/StatsService.cpp
     src/Services/ContactService.h

@@ -5,7 +5,10 @@
 #include "FactFilter.h"
 #include "ResponseValidator.h"
 #include "ConversationState.h"
+#include "ConversationStateManager.h"
 #include "MemoryRetriever.h"
+#include "MemoryImportanceEvaluator.h"
+#include "MemoryConflictManager.h"
 
 #include <QDir>
 #include <QFile>
@@ -41,6 +44,12 @@ AiService::AiService(QObject *parent)
     , m_convo(new ConversationState)
 {
     ensureMemory();
+    const QString contactDir = ContactService::instance().contactDir(ContactService::instance().currentId());
+    QDir().mkpath(contactDir);
+    // v3.9 sidecars: conflict ledger + conversation resume point (memory.json untouched)
+    MemoryConflictManager::setLedgerPath(contactDir + "/memory_meta.json");
+    ConversationStateManager::setStatePath(contactDir + "/conversation_state.json");
+    ConversationStateManager::load(*m_convo);
 }
 
 QString AiService::memoryPath() const
@@ -520,10 +529,11 @@ qint64 AiService::lastInputMs()
 #endif
 }
 
-// ---- idle chat: AI proactively starts a topic (topic-scored) ----
+// ---- idle chat: AI proactively starts a topic (unified pipeline) ----
+// idleChat -> ContextManager (system data) -> MemoryRetriever (recall)
+//          -> TopicSelector (rankTopics) -> PromptBuilder -> DeepSeek
 void AiService::idleChat()
 {
-    QString mem = readMemory();
     QString user = ConfigService::instance().userName();
     QString ai = ContactService::instance().currentName();
     QString fg = foregroundApp();         // cheap win32 call
@@ -545,22 +555,41 @@ void AiService::idleChat()
             userFacts << uf.at(uf.size() - 1 - i).content;
     }
 
-    // ---- Topic scorer: ranked candidates instead of a flat prompt ----
+    // ---- feed real system data into the shared ContextManager so the same
+    //      recall + fact gate applies to proactive chat as to replies ----
+    QStringList sysFacts;
+    if (ConfigService::instance().allowStateRead()) {
+        if (!state.isEmpty() && state != "active") {
+            m_ctx->addSystemData(state, 0.95, {"state"});
+            sysFacts << QString("- [system_data] 用户当前状态：%1").arg(state);
+        }
+        if (!fg.isEmpty()) {
+            m_ctx->addSystemData("用户当前前台窗口是 " + fg, 0.90, {"foreground"});
+            sysFacts << QString("- [system_data] 用户当前前台窗口是 %1").arg(fg);
+        }
+    }
+
+    // ---- MemoryRetriever: recall memories relevant to the current situation ----
+    QString memBlock;
+    {
+        const QString query = (state + " " + fg + " " + recent).simplified();
+        QList<Fact> rec = m_ctx->retrieveMemories(query, m_convo ? m_convo->topic : QString(), 6);
+        QStringList lines;
+        for (const Fact &f : rec) {
+            lines << QString("- [%1] %2").arg(f.memKindName(), f.content);
+            MemoryConflictManager::bumpUsage(f.content);
+        }
+        MemoryConflictManager::save();
+        memBlock = lines.join("\n");
+    }
+
+    // ---- TopicSelector: ranked candidates instead of a flat prompt ----
     QList<ContextManager::TopicScore> topics = m_ctx->rankTopics(
         unfinished, interests, recentLines, events, userFacts);
     QStringList topTopics;
     int nt = qMin(topics.size(), 3);
     for (int i = 0; i < nt; ++i)
         topTopics << QString("- %1（%2）").arg(topics.at(i).topic, topics.at(i).source);
-
-    // system data facts for this moment (real detection only)
-    QStringList sysFacts;
-    if (ConfigService::instance().allowStateRead()) {
-        if (!state.isEmpty() && state != "active")
-            sysFacts << QString("- [system_data] 用户当前状态：%1").arg(state);
-        if (!fg.isEmpty())
-            sysFacts << QString("- [system_data] 用户当前前台窗口是 %1").arg(fg);
-    }
 
     auto *watcher = new QFutureWatcher<QString>(this);
     connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
@@ -582,11 +611,13 @@ void AiService::idleChat()
     // collect the process snapshot in the worker thread (one tasklist call,
     // only on idle trigger — zero cost during normal use)
     QFuture<QString> future = QtConcurrent::run(
-        [mem, user, ai, fg, recent, state, aiState, topTopics, sysFacts, this]() {
+        [user, ai, fg, recent, state, aiState, topTopics, sysFacts, memBlock, this]() {
         QString prompt = "你是" + ai + "，人设：" + aiPersonality() + "。用户" + user + "已经有一会儿没操作电脑了。\n"
             + "【我们的关系】" + relationshipText() + "\n"
             + "【已验证事实】（仅系统真实检测）\n"
             + (sysFacts.isEmpty() ? QString("- （用户关闭了状态感知，或当前无特殊状态）") : sysFacts.join("\n")) + "\n"
+            + "【相关记忆】（评分召回，仅可参考，不能作为当前事实断言）\n"
+            + (memBlock.isEmpty() ? QString("- （暂无相关记忆）") : memBlock) + "\n"
             + "【推荐话题】（按评分排序，选分数最高且合适的一个自然提起）\n"
             + (topTopics.isEmpty() ? QString("- 普通陪伴（不用涉及具体事情）") : topTopics.join("\n")) + "\n"
             + "【会话纪律】只可说上面[已验证事实]里的内容；没有任何数据时禁止'你又在打游戏''你是不是在玩'这类猜测。"
@@ -595,7 +626,7 @@ void AiService::idleChat()
             + "如果存在未解决的情绪事件，优先延续情绪话题，禁止切换成喝水/睡觉/健康提醒。\n"
             + "【减少固定模板】禁止'喝水/休息/吃饭'式查岗关心，按推荐话题自然延续。\n"
             + "【回复格式】只输出对话内容，禁止（动作）/*动作*//旁白，25字以内一句话。\n"
-            + "你的当前状态：" + aiState + "\n你可以参考记忆：\n" + mem
+            + "你的当前状态：" + aiState
             + "\n只输出这句话本身，若决定不打扰则输出空。";
         return callDeepSeekStatic("你是温柔可爱的AI陪伴者。", prompt);
     });
@@ -674,6 +705,10 @@ void AiService::updateConversationState(const QString &userText, const QString &
         m_convo->relationshipMode = "neutral";
         m_convo->assistantIntent = "自然延续对话";
     }
+    // v3.9: mood / interaction style / unfinished topic / last important message
+    ConversationStateManager::update(*m_convo, t, aiReply, emotion);
+    if (ConfigService::instance().allowLongTermMemory())
+        ConversationStateManager::save(*m_convo);
     m_convo->lastUpdate = QDateTime::currentDateTime();
 }
 
@@ -1003,8 +1038,14 @@ void AiService::maybeSummarize()
         watcher->deleteLater();
         m_summarizing = false;
         if (note.isEmpty() || note == "无") return;
-        // keep a mid-term topic summary for context continuity
+        // v3.9: only worthwhile content enters long-term memory. Even when
+        // skipped, the summary stays as a session-only topicSummary so the
+        // current conversation doesn't lose track.
         if (m_convo) m_convo->topicSummary = note;
+        if (!MemoryImportanceEvaluator::worthStoring(note)) {
+            qWarning("[memory] summary skipped (low importance): %s", qUtf8Printable(note.left(40)));
+            return;
+        }
         appendNote(note);
     });
     QFuture<QString> future = QtConcurrent::run([prompt]() {
@@ -1050,6 +1091,42 @@ void AiService::setChatHistory(const QString &history)
         m_chatBuffer.removeFirst();
 }
 
+// ---- v3.9: conflict resolution + explicit remember ----
+void AiService::runConflictResolution(const QString &userText, const QString &memJson)
+{
+    if (userText.isEmpty()) return;
+
+    QJsonDocument d = QJsonDocument::fromJson(memJson.toUtf8());
+    QJsonObject o = d.isObject() ? d.object() : QJsonObject();
+    QStringList notes;
+    const QJsonArray arr = o.value("notes").toArray();
+    for (const QJsonValue &v : arr) notes << v.toString();
+
+    // 1) user contradicts an old memory -> deprecate old, store the corrected fact
+    MemoryConflictManager::Resolution cr = MemoryConflictManager::resolve(userText, notes);
+    if (cr.hadConflict) {
+        for (const QString &created : cr.created)
+            if (MemoryImportanceEvaluator::worthStoring(created))
+                appendNote(created); // active replacement fact
+        qWarning("[memory] conflict resolved: deprecated %d old, created %d new",
+                 (int)cr.deprecated.size(), (int)cr.created.size());
+    }
+    // 2) explicit "记住..." -> store directly (highest importance)
+    if (MemoryImportanceEvaluator::importanceScore(userText) >= 1.0)
+        appendNote(userText);
+    if (cr.hadConflict)
+        MemoryConflictManager::save();
+}
+
+// ---- v3.9: bump recall usage so frequently-used memories rise in future ----
+void AiService::bumpRecalledUsage(const QString &userMsg, const QString &topic)
+{
+    const QList<Fact> recalled = m_ctx->retrieveMemories(userMsg, topic, 20);
+    for (const Fact &f : recalled)
+        MemoryConflictManager::bumpUsage(f.content);
+    MemoryConflictManager::save();
+}
+
 // ---- DeepSeek chat: ContextManager -> FactFilter -> Prompt Builder -> LLM -> Validator ----
 void AiService::sendMessage(const QString &text)
 {
@@ -1063,6 +1140,9 @@ void AiService::sendMessage(const QString &text)
 
     // ---- Context Manager: ingest user message as a verified fact ----
     m_ctx->addUserMessage(text, {"user_said"});
+
+    // ---- v3.9: memory conflict resolution (old fact vs new statement) ----
+    runConflictResolution(userForMemory, mem);
 
     // ---- correction detection (semantic): user negates the last AI claim ----
     QStringList corrected = m_ctx->detectCorrection(text, m_lastAiReply);
@@ -1096,7 +1176,15 @@ void AiService::sendMessage(const QString &text)
         for (int i = 0; i < n; ++i) {
             QString note = notes.at(i).toString();
             MemoryKind k = MemoryRetriever::classify(note);
-            m_ctx->addMemoryFact(note, k, {"memory_note"});
+            // v3.9: per-entry importance (evaluator) + recall usage + lifecycle status.
+            // deprecated/replaced notes are marked so isFact() excludes them everywhere.
+            double imp = qMax(MemoryImportanceEvaluator::importanceScore(note),
+                              MemoryEntry::kindImportance(k));
+            double usage = MemoryConflictManager::usageFrequency(note);
+            MemoryStatus st = MemoryConflictManager::isDeprecated(note)
+                                  ? MemoryStatus::Deprecated
+                                  : MemoryStatus::Active;
+            m_ctx->addMemoryFact(note, k, {"memory_note"}, imp, usage, st);
         }
         QJsonArray evts = o.value("events").toArray();
         int e = qMin(evts.size(), 20);
@@ -1164,6 +1252,8 @@ void AiService::sendMessage(const QString &text)
     QString factsText = m_ctx->factsSection(12, text, m_convo->topic);
     // debug log: how memories were recalled for this message
     qWarning("%s", qUtf8Printable(m_ctx->recallReport(text, m_convo->topic)));
+    // v3.9: track which memories were actually useful this turn
+    bumpRecalledUsage(text, m_convo->topic);
     if (factsText.isEmpty())
         factsText = "（暂无已验证信息，宁可少说不可编造）";
     QString hypsText = m_ctx->hypothesesSection(3);

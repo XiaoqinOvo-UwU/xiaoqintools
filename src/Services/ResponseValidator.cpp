@@ -1,5 +1,6 @@
 #include "ResponseValidator.h"
 #include "FactFilter.h"
+#include "ResponseRepair.h"
 #include <QRegularExpression>
 
 QString ResponseValidator::stripControlTokens(const QString &raw)
@@ -34,13 +35,23 @@ QString ResponseValidator::stripStageDirections(const QString &raw)
     return s.trimmed();
 }
 
+// repair (not delete) fabricated observations:
+//   - line has an observation phrase
+//   - AND no verified fact text appears on the line
+// -> rewrite via ResponseRepair; fall back to deletion when no rewrite exists
 QString ResponseValidator::stripUnsupportedObservations(const QString &raw, const QString &factText)
 {
-    QString out = raw;
+    return stripUnsupportedObservationsImpl(raw, factText, nullptr, nullptr);
+}
+
+QString ResponseValidator::stripUnsupportedObservationsImpl(const QString &raw, const QString &factText,
+                                                            int *repaired, int *dropped)
+{
     const QStringList lines = raw.split('\n');
     QStringList kept;
+    int nRepaired = 0, nDropped = 0;
     for (const QString &line : lines) {
-        bool fabricated = false;
+        bool unsupported = false;
         for (const QString &ph : FactFilter::observationPhrases()) {
             if (line.contains(ph)) {
                 bool supported = false;
@@ -53,11 +64,24 @@ QString ResponseValidator::stripUnsupportedObservations(const QString &raw, cons
                         break;
                     }
                 }
-                if (!supported) { fabricated = true; break; }
+                if (!supported) { unsupported = true; break; }
             }
         }
-        if (!fabricated) kept << line;
+        if (!unsupported) {
+            kept << line;
+            continue;
+        }
+        // try to repair into a natural uncertain expression first
+        QString r = ResponseRepair::repairObservationLine(line);
+        if (!r.isEmpty()) {
+            kept << r;
+            ++nRepaired;
+        } else {
+            ++nDropped; // last-resort deletion
+        }
     }
+    if (repaired) *repaired = nRepaired;
+    if (dropped) *dropped = nDropped;
     return kept.join('\n').trimmed();
 }
 
@@ -95,10 +119,13 @@ ResponseValidator::Result ResponseValidator::validate(const QString &raw, const 
     s = stripControlTokens(s);
     s = stripStageDirections(s);
 
-    // observation fabrication check (uses the fact block as support base)
-    const QString withoutObs = stripUnsupportedObservations(s, verifiedFacts);
-    if (withoutObs != s)
-        r.observationsStripped = 1;
+    // observation fabrication check (uses the fact block as support base).
+    // Unsupported observations are REPAIRED, not just deleted.
+    int repaired = 0, dropped = 0;
+    const QString withoutObs = stripUnsupportedObservationsImpl(s, verifiedFacts, &repaired, &dropped);
+    r.observationsRepaired = repaired;
+    if (dropped > 0)
+        r.observationsStripped = dropped;
     s = withoutObs;
 
     s = trimToDialog(s);

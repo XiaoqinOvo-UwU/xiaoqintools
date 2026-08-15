@@ -419,7 +419,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.8.0"
+                        text: "小钦的工具 v3.8.5"
                         color: Theme.textDim
                         font.pixelSize: Theme.fsCaption
                     }

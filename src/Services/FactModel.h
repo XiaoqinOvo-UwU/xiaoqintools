@@ -21,12 +21,22 @@ enum class FactSource {
     Inference      // AI guess — hypothesis only, never a fact
 };
 
-// memory sub-type — which long-term bucket this memory came from
+// memory sub-type — which long-term bucket this memory came from.
+// Ordering (values 0..3) is stable for backward compatibility with existing
+// tests / saved data. HabitMemory (4) was added in v3.9.
 enum class MemoryKind {
-    UserFact,      // user told the AI directly   -> confidence 1.0
-    SystemData,    // real detection               -> confidence 0.95
-    MemoryEvent,   // shared experience            -> confidence 0.85
-    MemorySummary  // LLM auto-summary             -> confidence 0.5
+    UserFact,      // 0 确定事实: user told the AI directly    -> confidence 1.0
+    SystemData,    // 1 real detection                         -> confidence 0.95
+    MemoryEvent,   // 2 历史经历: shared experience            -> confidence 0.85
+    MemorySummary, // 3 AI理解: LLM auto-summary (low trust)   -> confidence 0.5
+    HabitMemory    // 4 长期习惯: user-stated repeated behavior -> confidence 0.8
+};
+
+// lifecycle of a long-term memory entry (never physically deleted)
+enum class MemoryStatus {
+    Active,      // usable as a fact
+    Deprecated,  // user contradicted it — must NOT be used as fact
+    Replaced     // superseded by a newer fact (replacedBy points to it)
 };
 
 struct Fact
@@ -41,8 +51,12 @@ struct Fact
     int         correctionCount = 0;     // how many times it was corrected
     QStringList tags;                    // e.g. {"game", "minecraft", "activity"}
     double      retrievalScore = 0.0;    // MemoryRetriever score (prompt ordering)
+    double      importance = -1.0;       // MemoryImportanceEvaluator score; -1 = use kind default
+    double      usageFrequency = 0.0;    // how often this memory was recalled (0..1)
+    MemoryStatus status = MemoryStatus::Active; // deprecated/replaced memories are excluded
+    QDateTime   lastUsedTime;            // last time this memory helped a reply
 
-    bool isFact() const { return !rejected && source != FactSource::Inference; }
+    bool isFact() const { return !rejected && status == MemoryStatus::Active && source != FactSource::Inference; }
     bool isHypothesis() const { return !rejected && source == FactSource::Inference; }
 
     QString memKindName() const
@@ -51,9 +65,10 @@ struct Fact
         case MemoryKind::UserFact:     return "USER_FACT";
         case MemoryKind::SystemData:   return "SYSTEM_DATA";
         case MemoryKind::MemoryEvent:  return "MEMORY_EVENT";
-        case MemoryKind::MemorySummary:return "MEMORY_SUMMARY";
+        case MemoryKind::MemorySummary:return "INTERPRETATION";
+        case MemoryKind::HabitMemory:  return "HABIT";
         }
-        return "MEMORY_SUMMARY";
+        return "INTERPRETATION";
     }
 
     QString sourceName() const
@@ -78,6 +93,9 @@ struct Fact
         o.insert("rejected", rejected);
         o.insert("corrections", correctionCount);
         o.insert("tags", QJsonArray::fromStringList(tags));
+        o.insert("importance", importance);
+        o.insert("usageFrequency", usageFrequency);
+        o.insert("status", (int)status);
         return o;
     }
 };
