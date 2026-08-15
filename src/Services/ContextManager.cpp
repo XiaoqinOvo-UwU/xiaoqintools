@@ -1,4 +1,5 @@
 #include "ContextManager.h"
+#include "MemoryRetriever.h"
 #include <QSet>
 #include <QRegularExpression>
 #include <cmath>
@@ -62,13 +63,14 @@ void ContextManager::addSystemData(const QString &content, double confidence, co
     addFact(f);
 }
 
-void ContextManager::addMemoryFact(const QString &content, const QStringList &tags)
+void ContextManager::addMemoryFact(const QString &content, MemoryKind kind, const QStringList &tags)
 {
     Fact f;
     f.id = nextId("mem");
     f.content = content;
     f.source = FactSource::Memory;
-    f.confidence = 0.7; // memory can be stale
+    f.memKind = kind;
+    f.confidence = MemoryEntry::kindConfidence(kind); // USER_FACT 1.0 ... SUMMARY 0.5
     f.tags = tags;
     addFact(f);
 }
@@ -114,6 +116,41 @@ QList<Fact> ContextManager::hypotheses() const
     for (const Fact &f : m_facts)
         if (f.isHypothesis()) out.append(f);
     return out;
+}
+
+QList<Fact> ContextManager::retrieveMemories(const QString &userMsg, const QString &topic, int max) const
+{
+    QList<Fact> out;
+    for (const Fact &f : m_facts) {
+        if (!f.isFact() || f.source != FactSource::Memory) continue;
+        Fact scored = f;
+        scored.retrievalScore = MemoryRetriever::score(
+            f.content, f.memKind, f.timestamp, f.tags.contains("memory_event"),
+            userMsg, topic);
+        out.append(scored);
+    }
+    // sort by score desc, take top `max`
+    std::sort(out.begin(), out.end(), [](const Fact &a, const Fact &b) {
+        return a.retrievalScore > b.retrievalScore;
+    });
+    if (out.size() > max)
+        out = out.mid(0, max);
+    return out;
+}
+
+QString ContextManager::recallReport(const QString &userMsg, const QString &topic, int max) const
+{
+    QList<Fact> hits = retrieveMemories(userMsg, topic, max);
+    QStringList lines;
+    lines << QString("[recall] query='%1' topic='%2' -> %3 memories")
+                 .arg(userMsg.left(30), topic.left(20)).arg(hits.size());
+    for (const Fact &f : hits)
+        lines << QString("  %1 | kind=%2 | score=%3 | conf=%4 | %5")
+                     .arg(f.id, f.memKindName())
+                     .arg(f.retrievalScore, 0, 'f', 2)
+                     .arg(f.confidence)
+                     .arg(f.content.left(50));
+    return lines.join("\n");
 }
 
 QStringList ContextManager::factIds() const
@@ -273,36 +310,45 @@ QList<ContextManager::TopicScore> ContextManager::rankTopics(
 }
 
 // ---- prompt sections ----
-QString ContextManager::factsSection(int maxFacts) const
+QString ContextManager::factsSection(int maxFacts, const QString &userMsg, const QString &topic) const
 {
     // source priority: system_data (real-time truth) > user_message (stated) > memory
     // and never flood the block with raw user quotes — cap user_message.
-    QList<Fact> sys, usr, mem;
+    QList<Fact> sys, usr;
     for (const Fact &f : m_facts) {
         if (!f.isFact()) continue;
-        switch (f.source) {
-        case FactSource::SystemData: sys.append(f); break;
-        case FactSource::UserMessage: usr.append(f); break;
-        case FactSource::Memory:      mem.append(f); break;
-        case FactSource::Inference:   break;
-        }
+        if (f.source == FactSource::SystemData) sys.append(f);
+        else if (f.source == FactSource::UserMessage) usr.append(f);
     }
     auto byConf = [](const Fact &a, const Fact &b) { return a.confidence > b.confidence; };
     std::sort(sys.begin(), sys.end(), byConf);
     std::sort(usr.begin(), usr.end(), byConf);
-    std::sort(mem.begin(), mem.end(), byConf);
+    // memory: reuse the score-based retriever (single source of truth for ranking)
+    QList<Fact> mem = retrieveMemories(userMsg, topic, 20);
 
     QStringList lines;
     int budget = maxFacts;
     auto take = [&](QList<Fact> &list, int max) {
         int n = qMin((int)list.size(), max);
-        for (int i = 0; i < n && budget > 0; ++i, --budget)
-            lines << QString("- [%1] %2").arg(list.at(i).sourceName(), list.at(i).content);
+        for (int i = 0; i < n && budget > 0; ++i, --budget) {
+            const Fact &f = list.at(i);
+            // show memory source type so the AI knows how reliable it is
+            if (f.source == FactSource::Memory)
+                lines << QString("- [%1] %2").arg(f.memKindName(), f.content);
+            else
+                lines << QString("- [%1] %2").arg(f.sourceName(), f.content);
+        }
     };
-    // system data first (up to half), then user statements (up to 3), then memory
-    take(sys, qMax(2, maxFacts / 2));
-    take(usr, 3);
+    // memory facts are the companion's long-term knowledge — give them the
+    // largest share. system data up to 3, user up to 2, rest goes to memory.
+    take(sys, 3);
+    take(usr, 2);
     take(mem, maxFacts);
+    // if budget still remains and more system/user facts exist, top up
+    if (budget > 0) {
+        take(sys, maxFacts);
+        take(usr, maxFacts);
+    }
     return lines.join("\n");
 }
 

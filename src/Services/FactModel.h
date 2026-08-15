@@ -21,19 +21,40 @@ enum class FactSource {
     Inference      // AI guess — hypothesis only, never a fact
 };
 
+// memory sub-type — which long-term bucket this memory came from
+enum class MemoryKind {
+    UserFact,      // user told the AI directly   -> confidence 1.0
+    SystemData,    // real detection               -> confidence 0.95
+    MemoryEvent,   // shared experience            -> confidence 0.85
+    MemorySummary  // LLM auto-summary             -> confidence 0.5
+};
+
 struct Fact
 {
     QString     id;               // stable id, e.g. "sys_foreground_1650000000"
     QString     content;          // "用户正在玩Minecraft"
     FactSource  source = FactSource::Inference;
+    MemoryKind  memKind = MemoryKind::MemorySummary; // valid when source==Memory
     double      confidence = 0.5; // 0.0 ~ 1.0
     QDateTime   timestamp = QDateTime::currentDateTime();
     bool        rejected = false;        // user corrected it -> excluded everywhere
     int         correctionCount = 0;     // how many times it was corrected
     QStringList tags;                    // e.g. {"game", "minecraft", "activity"}
+    double      retrievalScore = 0.0;    // MemoryRetriever score (prompt ordering)
 
     bool isFact() const { return !rejected && source != FactSource::Inference; }
     bool isHypothesis() const { return !rejected && source == FactSource::Inference; }
+
+    QString memKindName() const
+    {
+        switch (memKind) {
+        case MemoryKind::UserFact:     return "USER_FACT";
+        case MemoryKind::SystemData:   return "SYSTEM_DATA";
+        case MemoryKind::MemoryEvent:  return "MEMORY_EVENT";
+        case MemoryKind::MemorySummary:return "MEMORY_SUMMARY";
+        }
+        return "MEMORY_SUMMARY";
+    }
 
     QString sourceName() const
     {

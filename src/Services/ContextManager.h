@@ -21,11 +21,18 @@ public:
     // ---- collection ----
     void addUserMessage(const QString &text, const QStringList &tags = {});
     void addSystemData(const QString &content, double confidence, const QStringList &tags = {});
-    void addMemoryFact(const QString &content, const QStringList &tags = {});
+    void addMemoryFact(const QString &content, MemoryKind kind, const QStringList &tags = {});
     void addHypothesis(const QString &content, double confidence, const QStringList &tags = {});
 
     void addFact(const Fact &f);                 // generic insert (dedupe by id)
     void clearSession();                         // wipe short-term cache
+
+    // ---- memory recall (score-based, returns most relevant first) ----
+    // `userMsg` = current user message, `topic` = current conversation topic.
+    QList<Fact> retrieveMemories(const QString &userMsg, const QString &topic, int max = 6) const;
+
+    // debug: human-readable recall report (for logs / tests)
+    QString recallReport(const QString &userMsg, const QString &topic, int max = 6) const;
 
     // ---- queries ----
     const QList<Fact> &facts() const { return m_facts; }
@@ -59,7 +66,7 @@ public:
         const QStringList &userRecentFacts) const; // recent user_message facts
 
     // ---- prompt building (used by FactFilter / AiService) ----
-    QString factsSection(int maxFacts) const;    // [确定] block
+    QString factsSection(int maxFacts, const QString &userMsg = QString(), const QString &topic = QString()) const; // [确定] block
     QString hypothesesSection(int maxHypotheses) const; // [推测] block
 
     // total lifetime corrections made this session (for stats/debug)

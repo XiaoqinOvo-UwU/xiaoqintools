@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(XiaoQinTools VERSION 3.7.0 LANGUAGES CXX)
+project(XiaoQinTools VERSION 3.8.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +37,8 @@ set(APP_SOURCES
     src/Services/AiService.h
     src/Services/AiService.cpp
     src/Services/FactModel.h
+    src/Services/MemoryRetriever.h
+    src/Services/MemoryRetriever.cpp
     src/Services/ConversationState.h
     src/Services/ContextManager.h
     src/Services/ContextManager.cpp

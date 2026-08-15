@@ -419,7 +419,7 @@ ApplicationWindow {
                     color: "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "小钦的工具 v3.7.0"
+                        text: "小钦的工具 v3.8.0"
                         color: Theme.textDim
                         font.pixelSize: Theme.fsCaption
                     }
@@ -611,10 +611,16 @@ ApplicationWindow {
 
             // ---------------- page 0: overview ----------------
             Item {
-                ColumnLayout {
+                ScrollView {
+                    id: profileScroll
                     anchors.fill: parent
-                    anchors.margins: Theme.sp5
-                    spacing: Theme.sp3
+                    clip: true
+                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                    ColumnLayout {
+                        width: profileScroll.availableWidth
+                        anchors.margins: Theme.sp5
+                        spacing: Theme.sp3
 
                     ProfileHeader {
                         Layout.fillWidth: true
@@ -679,6 +685,12 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         spacing: Theme.sp3
                         AppButton {
+                            text: "查看记忆"
+                            variant: "secondary"
+                            Layout.fillWidth: true
+                            onClicked: memoryViewDialog.open()
+                        }
+                        AppButton {
                             text: "添加记忆"
                             variant: "secondary"
                             Layout.fillWidth: true
@@ -697,6 +709,7 @@ ApplicationWindow {
                                 islandToast.show("记忆已清空~")
                             }
                         }
+                    }
                     }
                 }
             }
@@ -1033,6 +1046,76 @@ ApplicationWindow {
                                 text: aiService.usageText() + "\n\n" + aiService.uptimeText()
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // memory viewer dialog: shows the AI's full memory report
+    DialogContainer {
+        id: memoryViewDialog
+        dialogTitle: "查看记忆"
+        dialogSubtitle: "AI 记住的关于你的一切"
+        dialogWidth: 560
+        dialogHeight: 520
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Theme.sp4
+            spacing: Theme.sp3
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: Theme.inputBg
+                radius: Theme.rMd
+                ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: Theme.sp2
+                    clip: true
+                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                    TextArea {
+                        id: memoryReportText
+                        width: parent.width
+                        color: Theme.text
+                        font.pixelSize: Theme.fsSmall
+                        readOnly: true
+                        wrapMode: TextEdit.Wrap
+                        background: null
+                        text: aiService.memoryDetail()
+                        // hint when entering edit mode
+                        onReadOnlyChanged: { if (!readOnly) text = aiService.memoryRaw() }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.sp3
+                AppButton {
+                    text: memoryReportText.readOnly ? "编辑原始记忆" : "取消编辑"
+                    variant: "secondary"
+                    Layout.fillWidth: true
+                    onClicked: {
+                        if (memoryReportText.readOnly) {
+                            // switch to raw JSON for editing
+                            memoryReportText.readOnly = false
+                        } else {
+                            memoryReportText.readOnly = true
+                            memoryReportText.text = aiService.memoryDetail()
+                        }
+                    }
+                }
+                AppButton {
+                    text: "保存修改"
+                    variant: "primary"
+                    Layout.fillWidth: true
+                    enabled: !memoryReportText.readOnly
+                    onClicked: {
+                        aiService.setMemoryRaw(memoryReportText.text)
+                        memoryReportText.readOnly = true
+                        memoryReportText.text = aiService.memoryDetail()
+                        islandToast.show("记忆已保存~")
                     }
                 }
             }

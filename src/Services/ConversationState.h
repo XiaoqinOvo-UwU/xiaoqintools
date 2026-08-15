@@ -21,6 +21,7 @@ struct ConversationState
     QString assistantIntent;     // "安慰并确认关系"
     QString relationshipMode;    // "comfort" | "casual" | "guidance" | "neutral"
     QString unresolvedIssue;     // non-empty while an emotional issue is open
+    QString topicSummary;        // mid-term: condensed summary of the current topic (filled by maybeSummarize)
     QDateTime lastUpdate;
 
     void clear() { *this = ConversationState(); }

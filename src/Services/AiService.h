@@ -98,6 +98,8 @@ public:
     Q_INVOKABLE QString memoryDetail();                 // full human-readable memory (settings view)
     Q_INVOKABLE void addMemoryNote(const QString &note); // user tells AI something to remember
     Q_INVOKABLE void clearMemory();                      // wipe memory (keep created stamp)
+    Q_INVOKABLE void setMemoryRaw(const QString &json);  // replace memory file (keep created) — for manual editing
+    Q_INVOKABLE QString memoryRaw();                     // raw memory.json as text (for editing)
 
     // ---- companion: relationship state + event memory (batch 1) ----
     Q_INVOKABLE void recordEvent(const QString &type, const QString &summary); // event memory (with date)

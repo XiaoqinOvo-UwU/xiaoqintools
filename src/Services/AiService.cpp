@@ -5,6 +5,7 @@
 #include "FactFilter.h"
 #include "ResponseValidator.h"
 #include "ConversationState.h"
+#include "MemoryRetriever.h"
 
 #include <QDir>
 #include <QFile>
@@ -931,6 +932,27 @@ void AiService::addMemoryNote(const QString &note)
     writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
 }
 
+// raw memory.json access for manual editing
+QString AiService::memoryRaw()
+{
+    return readMemory();
+}
+
+void AiService::setMemoryRaw(const QString &json)
+{
+    QJsonParseError pe;
+    QJsonDocument d = QJsonDocument::fromJson(json.toUtf8(), &pe);
+    if (pe.error != QJsonParseError::NoError || !d.isObject()) return; // keep old on invalid
+    QJsonObject o = d.object();
+    // always preserve the first-use stamp
+    QJsonObject old = QJsonDocument::fromJson(readMemory().toUtf8()).object();
+    if (!o.contains("created") && old.contains("created"))
+        o.insert("created", old.value("created"));
+    writeMemory(QString::fromUtf8(QJsonDocument(o).toJson()));
+    m_chatBuffer.clear();
+    m_userTurns = 0;
+}
+
 void AiService::clearMemory()
 {
     QString mem = readMemory();
@@ -959,7 +981,7 @@ void AiService::trackChatTurn(const QString &userText, const QString &aiReply)
         m_chatBuffer.append(aLine);
     }
     // trim from the front, but ALWAYS keep at least the current pair
-    while (m_chatBuffer.size() > 12)
+    while (m_chatBuffer.size() > 8)
         m_chatBuffer.removeFirst();
     maybeSummarize();
 }
@@ -981,6 +1003,8 @@ void AiService::maybeSummarize()
         watcher->deleteLater();
         m_summarizing = false;
         if (note.isEmpty() || note == "无") return;
+        // keep a mid-term topic summary for context continuity
+        if (m_convo) m_convo->topicSummary = note;
         appendNote(note);
     });
     QFuture<QString> future = QtConcurrent::run([prompt]() {
@@ -1022,7 +1046,7 @@ void AiService::setChatHistory(const QString &history)
         if (t.isEmpty()) continue;
         m_chatBuffer.append(t);
     }
-    while (m_chatBuffer.size() > 12)
+    while (m_chatBuffer.size() > 8)
         m_chatBuffer.removeFirst();
 }
 
@@ -1062,16 +1086,37 @@ void AiService::sendMessage(const QString &text)
     }
 
     // ---- Context Manager: ingest long-term memory as memory facts ----
+    // load ALL notes + events (not a fixed count); MemoryRetriever will score
+    // and select the most relevant ones for the current context.
     {
         QJsonDocument d = QJsonDocument::fromJson(mem.toUtf8());
         QJsonObject o = d.isObject() ? d.object() : QJsonObject();
         QJsonArray notes = o.value("notes").toArray();
-        int n = qMin(notes.size(), 8);
-        for (int i = 0; i < n; ++i)
-            m_ctx->addMemoryFact(notes.at(i).toString(), {"memory_note"});
-        QString events = eventMemoryText(4);
-        if (!events.isEmpty())
-            m_ctx->addMemoryFact(events, {"memory_event"});
+        int n = qMin(notes.size(), 40); // bound the session cache, not the recall
+        for (int i = 0; i < n; ++i) {
+            QString note = notes.at(i).toString();
+            MemoryKind k = MemoryRetriever::classify(note);
+            m_ctx->addMemoryFact(note, k, {"memory_note"});
+        }
+        QJsonArray evts = o.value("events").toArray();
+        int e = qMin(evts.size(), 20);
+        for (int i = 0; i < e; ++i) {
+            QJsonObject ev = evts.at(i).toObject();
+            QString summary = ev.value("summary").toString().trimmed();
+            QString date = ev.value("date").toString();
+            if (summary.isEmpty()) continue;
+            Fact evFact;
+            // stable unique id from content+date so dedupe/reject work reliably
+            evFact.id = "mem_evt_" + QString::number(qHash(summary + "|" + date));
+            evFact.content = date.isEmpty() ? summary : summary + "（" + date + "）";
+            evFact.source = FactSource::Memory;
+            evFact.memKind = MemoryKind::MemoryEvent;
+            evFact.confidence = 0.85;
+            evFact.tags = { "memory_event" };
+            QDateTime dt = QDateTime::fromString(date, "yyyy-MM-dd");
+            if (dt.isValid()) evFact.timestamp = dt;
+            m_ctx->addFact(evFact);
+        }
     }
 
     // companion: auto-capture emotionally significant moments as event memory
@@ -1114,8 +1159,11 @@ void AiService::sendMessage(const QString &text)
     else
         strategy = "正常聊天，自然延续。";
 
-    // FactFilter: code-level guarantee of what can be stated as fact
-    QString factsText = m_ctx->factsSection(8);
+    // FactFilter: code-level guarantee of what can be stated as fact.
+    // Score memories against the current message + conversation topic.
+    QString factsText = m_ctx->factsSection(12, text, m_convo->topic);
+    // debug log: how memories were recalled for this message
+    qWarning("%s", qUtf8Printable(m_ctx->recallReport(text, m_convo->topic)));
     if (factsText.isEmpty())
         factsText = "（暂无已验证信息，宁可少说不可编造）";
     QString hypsText = m_ctx->hypothesesSection(3);
@@ -1142,6 +1190,8 @@ void AiService::sendMessage(const QString &text)
         + "【回复格式】只输出对话内容本身。禁止括号动作（如（温柔地看着你））、星号动作（如*抱住你*）、"
           "旁白。把情绪融入对话（'没关系啦'而非（语气轻）'没关系。'）。\n"
         + "【减少固定模板】禁止频繁'喝水/休息/吃饭/打游戏'式查岗关心，多聊话题、共同经历、兴趣。\n"
+        + "【话题摘要】（中期记忆：如果之前聊过一个话题并总结过，这里给出概要，帮助你延续而不失忆）\n"
+        + (m_convo->topicSummary.isEmpty() ? QString("（暂无，继续当前对话）") : m_convo->topicSummary) + "\n"
         + "【当前会话状态】（保持连续性：继续当前话题和情绪，不要跳回通用提醒）\n"
         + conversationStateBlock() + "\n"
         + "【会话纪律】如果存在未解决的情绪事件（委屈/压力/孤独/寻求陪伴），必须优先处理情绪，"
