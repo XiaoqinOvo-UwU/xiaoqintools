@@ -344,11 +344,16 @@ Rectangle {
 
                         // invisible center line: each side shares half the width,
                         // text wraps automatically once it would cross the line.
-                        // floor of 150 keeps narrow windows readable.
-                        readonly property real centerLimit: Math.max(150, msgView.width / 2 - 56)
+                        // The floor must stay BELOW the real half-width — a larger
+                        // floor caps short messages early AND makes bubbles cross
+                        // the center in narrow windows.
+                        readonly property real centerLimit: Math.max(120, msgView.width / 2 - 56)
+                        // +4 safety buffer: prevents exact-fit text (especially
+                        // messages containing a space) from wrapping a glyph over
+                        // to a second line.
                         width: model.msg === "..."
                                    ? 64
-                                   : Math.min(bubble.contentWidth + 28, bubble.centerLimit)
+                                   : Math.min(bubble.contentWidth + 28 + 4, bubble.centerLimit)
 
                         anchors.left: model.isAi ? aiAv.right : undefined
                         anchors.leftMargin: model.isAi ? 8 : 0
@@ -415,8 +420,9 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 60
             color: Theme.chatPanelBg
-            border.color: Theme.glassBorder
-            border.width: 1
+            // no outer border box — the input field itself carries the focus ring
+            border.color: "transparent"
+            border.width: 0
 
             RowLayout {
                 anchors.fill: parent

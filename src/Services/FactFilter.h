@@ -24,6 +24,10 @@ public:
     static const QStringList &observationPhrases(); // "我看到你", "你刚刚一直", "你又在", "你是不是在"...
     static const QStringList &stagePhrases();       // bracketed/starred actions handled separately
 
+    // phrases describing physical actions the AI cannot perform (抱抱/点外卖/
+    // 走到你身边...). The AI must stay in online/network communication mode.
+    static const QStringList &physicalActionPhrases();
+
     // does the reply contain an unsupported observation phrase?
     // `supportedContent` = verified facts text; phrase must match a fact,
     // otherwise the offending part is stripped.

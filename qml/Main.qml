@@ -97,10 +97,8 @@ ApplicationWindow {
             var parts = list[i].split("|")
             if (parts.length >= 3) {
                 var avatarUrl = ""
-                if (parts[2] === "1") {
-                    var raw = contactService.contactAvatarPath(parts[0])
-                    avatarUrl = raw.length > 0 ? "file:///" + raw.replace(/\\/g, "/") : ""
-                }
+                if (parts[2] === "1")
+                    avatarUrl = contactService.contactAvatarUrl(parts[0])
                 var preview = lastMsgFor(parts[0])
                 contactModel.append({ "cid": parts[0], "cname": parts[1], "hasAvatar": parts[2], "avatarUrl": avatarUrl, "lastMsg": preview })
             }
@@ -243,6 +241,8 @@ ApplicationWindow {
                                 visible: root.userAvatarPath.length > 0
                                 source: root.userAvatarPath
                                 fillMode: Image.PreserveAspectCrop
+                                smooth: true
+                                mipmap: true
                             }
                             Text {
                                 id: userAvatarText
@@ -314,7 +314,7 @@ ApplicationWindow {
                     }
                     MenuItem {
                         text: "设 置"
-                        onClicked: root.currentPage = 3
+                        onClicked: pageStack.switchPage(3)
                     }
                     MenuItem {
                         text: "导 出配置"
@@ -375,11 +375,15 @@ ApplicationWindow {
                                 radius: 18
                                 color: Theme.accent
                                 clip: true
+                                antialiasing: true
+                                smooth: true
                                 Image {
                                     anchors.fill: parent
                                     visible: avatarUrl.length > 0
                                     source: avatarUrl
                                     fillMode: Image.PreserveAspectCrop
+                                    smooth: true
+                                    mipmap: true
                                 }
                                 Text {
                                     anchors.centerIn: parent
@@ -517,8 +521,8 @@ ApplicationWindow {
                         Keys.onReturnPressed: activate()
                         Keys.onEnterPressed: activate()
                         Keys.onSpacePressed: activate()
-                        function activate() {
-                            root.currentPage = myIndex
+                         function activate() {
+                            pageStack.switchPage(myIndex)
                             root.chatOpen = false
                         }
 
@@ -578,6 +582,7 @@ ApplicationWindow {
                     source: root.wallpaperUrl
                     fillMode: Image.PreserveAspectCrop
                     smooth: true
+                    mipmap: true
                     opacity: 0.20
                 }
                 Image {
@@ -586,6 +591,7 @@ ApplicationWindow {
                     source: ""
                     fillMode: Image.PreserveAspectCrop
                     smooth: true
+                    mipmap: true
                     opacity: 0
                 }
                 SequentialAnimation {
@@ -626,10 +632,13 @@ ApplicationWindow {
                 visible: !root.chatOpen
 
                 onCurrentIndexChanged: {
-                    var item = pageStack.currentItem
+                    // NOTE: pageStack.currentItem is UNDEFINED in this handler;
+                    // use itemAt(currentIndex) — that's why page switches had no
+                    // animation before.
+                    var item = pageStack.itemAt(pageStack.currentIndex)
                     if (item) {
                         item.opacity = 0
-                        item.scale = 0.995
+                        item.scale = 0.96
                         itemBehavior.target = item
                         itemBehavior.restart()
                     }
@@ -639,8 +648,41 @@ ApplicationWindow {
                     id: itemBehavior
                     property Item target
                     ParallelAnimation {
-                        NumberAnimation { target: itemBehavior.target; property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
-                        NumberAnimation { target: itemBehavior.target; property: "scale"; from: 0.995; to: 1; duration: 200; easing.type: Easing.OutCubic }
+                        NumberAnimation { target: itemBehavior.target; property: "opacity"; to: 1; duration: 170; easing.type: Easing.OutCubic }
+                        NumberAnimation { target: itemBehavior.target; property: "scale"; to: 1.0; duration: 170; easing.type: Easing.OutCubic }
+                    }
+                }
+
+                // ---- page exit: fade out the current page, then switch ----
+                // The outgoing page must animate BEFORE currentIndex changes
+                // (StackLayout hides it instantly on switch), so switching goes
+                // through switchPage() which runs this first.
+                property int pendingPage: -1
+                function switchPage(idx) {
+                    if (idx === root.currentPage) return
+                    var out = pageStack.itemAt(pageStack.currentIndex)
+                    if (out) {
+                        // NOTE: unqualified `pendingPage` is NOT visible inside
+                        // nested signal handlers (ReferenceError -> frozen UI).
+                        // Qualify explicitly.
+                        pageStack.pendingPage = idx
+                        pageOutAnim.target = out
+                        pageOutAnim.restart()
+                    } else {
+                        root.currentPage = idx
+                    }
+                }
+                ParallelAnimation {
+                    id: pageOutAnim
+                    property Item target
+                    // fast exit (quicker than enter, quick start) so switching
+                    // never feels sticky: 110ms OutCubic reads as a brisk
+                    // fade-out instead of a slow drag.
+                    NumberAnimation { target: pageOutAnim.target; property: "opacity"; to: 0; duration: 110; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: pageOutAnim.target; property: "scale"; to: 0.98; duration: 110; easing.type: Easing.OutCubic }
+                    onFinished: {
+                        root.currentPage = pageStack.pendingPage
+                        pageStack.pendingPage = -1
                     }
                 }
 
@@ -709,7 +751,7 @@ ApplicationWindow {
     Dialog {
         id: profileDialog
         width: 340
-        height: 560
+        height: 480
         modal: true
         padding: 18
         background: Rectangle {
@@ -718,57 +760,141 @@ ApplicationWindow {
             border.color: Theme.glassBorder
             border.width: 1
         }
+        // entrance / exit: fade + scale (not a jarring pop)
+        enter: Transition {
+            NumberAnimation { property: "scale"; from: 0.94; to: 1.0; duration: 200; easing.type: Easing.OutCubic }
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
+        }
+        exit: Transition {
+            NumberAnimation { property: "scale"; to: 0.96; duration: 160; easing.type: Easing.InCubic }
+            NumberAnimation { property: "opacity"; to: 0; duration: 160; easing.type: Easing.InCubic }
+        }
+
+        property bool closeHover: false
+
+        function saveProfile() {
+            aiService.setUserName(editName.text.trim())
+            aiService.setAvatarChar(editAvatar.text.trim())
+            root.refreshProfile()
+            profileDialog.close()
+            islandToast.show("资料已更新~")
+        }
+
         header: Item {
             height: 36
             Text {
-                anchors.centerIn: parent
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
                 text: "编辑资料"
                 color: Theme.text
                 font.pixelSize: 16
                 font.bold: true
             }
+            // ghost close button (no emoji)
+            Text {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: "✕"
+                color: profileDialog.closeHover ? Theme.text : Theme.textDim
+                font.pixelSize: 15
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: profileDialog.closeHover = true
+                    onExited: profileDialog.closeHover = false
+                    onClicked: profileDialog.close()
+                }
+            }
         }
+
         ColumnLayout {
             width: parent.width
             height: parent.height
-            spacing: 10
+            spacing: 12
+
+            // avatar preview — click to change (shows current avatar or char)
+            Item {
+                Layout.alignment: Qt.AlignHCenter
+                width: 96; height: 96
+                Rectangle {
+                    id: userAvatarPreview
+                    width: 72; height: 72; radius: 36
+                    anchors.centerIn: parent
+                    color: Theme.accent
+                    clip: true
+                    antialiasing: true
+                    border.color: Theme.glassBorder
+                    border.width: 1
+                    Image {
+                        anchors.fill: parent
+                        visible: root.userAvatarPath.length > 0
+                        source: root.userAvatarPath
+                        fillMode: Image.PreserveAspectCrop
+                        smooth: true; mipmap: true
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        visible: root.userAvatarPath.length === 0
+                        text: editAvatar.text.length ? editAvatar.text : aiService.avatarChar()
+                        color: "white"
+                        font.pixelSize: 28
+                        font.bold: true
+                    }
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: { fileDialog.avatarTarget = "user"; fileDialog.open() }
+                }
+                Text {
+                    anchors.top: parent.bottom
+                    anchors.topMargin: 4
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "点击更换头像"
+                    color: Theme.textDim
+                    font.pixelSize: 11
+                }
+            }
 
             Text { text: "名字"; color: Theme.textDim; font.pixelSize: 12 }
             TextField {
                 id: editName
                 Layout.fillWidth: true
-                Layout.preferredHeight: 34
+                Layout.preferredHeight: 36
                 color: Theme.text
                 text: aiService.userName()
                 background: Rectangle { color: Theme.inputBg; radius: 8 }
+                Keys.onReturnPressed: profileDialog.saveProfile()
             }
-            Text { text: "头像文字"; color: Theme.textDim; font.pixelSize: 12 }
+
+            Text { text: "头像文字（单字）"; color: Theme.textDim; font.pixelSize: 12 }
             TextField {
                 id: editAvatar
                 Layout.fillWidth: true
-                Layout.preferredHeight: 34
+                Layout.preferredHeight: 36
                 color: Theme.text
                 text: aiService.avatarChar()
                 maximumLength: 1
                 background: Rectangle { color: Theme.inputBg; radius: 8 }
+                Keys.onReturnPressed: profileDialog.saveProfile()
             }
+
             AppButton {
-                text: "🖼 用户头像"
+                text: "选择头像图片"
                 Layout.fillWidth: true
-                implicitHeight: 32
-                onClicked: {
-                    fileDialog.avatarTarget = "user"
-                    fileDialog.open()
-                }
+                implicitHeight: 36
+                onClicked: { fileDialog.avatarTarget = "user"; fileDialog.open() }
             }
-            Text { text: "AI 人设"; color: Theme.textDim; font.pixelSize: 12 }
+
             Text {
                 Layout.fillWidth: true
-                text: "AI 名字、人设和头像请到「设置 → AI 配置」里修改"
+                text: "AI 的名字、人设和头像：打开聊天后点击左上角 AI 头像修改"
                 color: Theme.textDim
                 font.pixelSize: 11
                 wrapMode: Text.Wrap
             }
+
+            Item { Layout.fillHeight: true }
 
             RowLayout {
                 Layout.fillWidth: true
@@ -776,16 +902,11 @@ ApplicationWindow {
                 AppButton {
                     text: "保存"
                     Layout.fillWidth: true
-                    onClicked: {
-                        aiService.setUserName(editName.text.trim())
-                        aiService.setAvatarChar(editAvatar.text.trim())
-                        root.refreshProfile()
-                        profileDialog.close()
-                        islandToast.show("资料已更新~")
-                    }
+                    onClicked: profileDialog.saveProfile()
                 }
                 AppButton {
                     text: "取消"
+                    variant: "ghost"
                     Layout.fillWidth: true
                     onClicked: profileDialog.close()
                 }
@@ -1396,19 +1517,36 @@ ApplicationWindow {
         }
     }
 
-    // ================= ISLAND TOAST =================
+    // ================= ISLAND TOAST (single instance) =================
     IslandToast {
         id: islandToast
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
         anchors.topMargin: 16
         z: 999
+        onActionChosen: function(index) { appCore.selectIslandAction(index) }
     }
 
     Connections {
         target: appCore
         function onToastRequested() {
             islandToast.show(appCore.toastMessage)
+        }
+        function onIslandRequested(message, options, actionId) {
+            if (options.length > 0)
+                islandToast.showChoice(message, options)
+            else
+                islandToast.show(message)
+        }
+        function onIslandActionChosen(actionId, index) {
+            // single decision point for island actions
+            if (actionId === "open_proxy") {
+                var which = index === 0 ? "Clash Verge" : "v2rayN"
+                appCore.setStatus("打开梯子中...")
+                var ok = index === 0 ? proxyService.launchClash() : proxyService.launchV2ray()
+                islandToast.show(ok ? "已打开 " + which : "打开失败")
+                if (ok) statsService.record("proxy", which)
+            }
         }
     }
 

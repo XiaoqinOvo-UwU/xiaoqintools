@@ -8,6 +8,7 @@
         <file>../qml/Components/ChatPage.qml</file>
         <file>../qml/Components/ReportDialog.qml</file>
         <file>../qml/Components/Theme.qml</file>
+        <file>../qml/Components/ThemeSwitch.qml</file>
         <file>../qml/Components/PageHeader.qml</file>
         <file>../qml/Components/Avatar.qml</file>
         <file>../qml/Components/Card.qml</file>

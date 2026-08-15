@@ -37,6 +37,10 @@ public:
     QString contactDir(const QString &id) const;
     QString contactMemoryPath(const QString &id) const;
     Q_INVOKABLE QString contactAvatarPath(const QString &id) const;
+    // display-ready file:// url with a cache-buster (#mtime) so QML Image
+    // reloads when the avatar file changes
+    Q_INVOKABLE QString contactAvatarUrl(const QString &id) const;
+    Q_INVOKABLE QString currentAvatarUrl() const;
 
     // ensure a default contact exists (first run)
     void ensureDefault();

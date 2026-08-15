@@ -1,4 +1,5 @@
 singleton Theme 1.0 Theme.qml
+ThemeSwitch 1.0 ThemeSwitch.qml
 Avatar 1.0 Avatar.qml
 Card 1.0 Card.qml
 NavItem 1.0 NavItem.qml

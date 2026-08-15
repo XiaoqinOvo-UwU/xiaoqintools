@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 // AppCore is the single bridge between QML and C++ business logic.
 // It owns the services and exposes a clean API surface to QML.
@@ -25,6 +26,13 @@ public:
     QString toastMessage() const { return m_toastMsg; }
     int toastSeq() const { return m_toastSeq; }
 
+    // ---- single dynamic-island (message + optional action buttons) ----
+    // Routes every island request to the ONE island instance in Main.qml, so
+    // the whole app can never show more than one island at a time.
+    Q_INVOKABLE void showIsland(const QString &message, const QStringList &options = {},
+                                const QString &actionId = QString());
+    Q_INVOKABLE void selectIslandAction(int index);   // called by the island UI
+
     // returns true if the exe runs from a recognized install location
     Q_INVOKABLE bool isProperLocation();
 
@@ -34,12 +42,15 @@ public:
 signals:
     void statusTextChanged();
     void toastRequested();
+    void islandRequested(QString message, QStringList options, QString actionId);
+    void islandActionChosen(QString actionId, int index);
 
 private:
     explicit AppCore(QObject *parent = nullptr);
     QString m_status = "在线";
     QString m_toastMsg;
     int m_toastSeq = 0;
+    QString m_islandActionId;
     class QTimer *m_revertTimer = nullptr;
     int m_revertSeq = 0;      // guard so only the latest status reverts
 };

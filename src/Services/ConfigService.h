@@ -73,6 +73,6 @@ private:
     bool m_allowTimeRecord = true;
     bool m_allowLongTermMemory = true;
     bool m_wallpaperBlurEnabled = true;
-    int  m_wallpaperBlurRadius = 24;
+    int  m_wallpaperBlurRadius = 12;   // subtle frosted by default
     double m_wallpaperBrightness = 0.5;
 };

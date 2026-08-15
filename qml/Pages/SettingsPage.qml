@@ -213,6 +213,8 @@ Page {
                                 visible: root.wpPreviewUrl.length > 0
                                 source: root.wpPreviewUrl
                                 fillMode: Image.PreserveAspectCrop
+                                smooth: true
+                                mipmap: true
                             }
                             Text {
                                 anchors.centerIn: parent
@@ -338,7 +340,7 @@ Page {
                                 color: Theme.textDim; font.pixelSize: 11
                             }
                         }
-                        Switch {
+                        ThemeSwitch {
                             id: wpBlurSwitch
                             checked: aiService.wallpaperBlurEnabled()
                             onToggled: aiService.setWallpaperBlurEnabled(checked)
@@ -427,12 +429,7 @@ Page {
                             font.pixelSize: 13
                             Layout.fillWidth: true
                         }
-                        Text {
-                            text: autostartSwitch.checked ? "已开启" : "已关闭"
-                            color: autostartSwitch.checked ? Theme.ok : Theme.textDim
-                            font.pixelSize: 11
-                        }
-                        Switch {
+                        ThemeSwitch {
                             id: autostartSwitch
                             checked: sysService.isAutoStartEnabled()
                             onToggled: {
@@ -533,12 +530,7 @@ Page {
                             font.pixelSize: 12
                             wrapMode: Text.Wrap
                         }
-                        Text {
-                            text: aiService.allowStateRead() ? "开" : "关"
-                            color: aiService.allowStateRead() ? Theme.ok : Theme.textDim
-                            font.pixelSize: 11
-                        }
-                        Switch {
+                        ThemeSwitch {
                             id: stateSwitch
                             checked: aiService.allowStateRead()
                             onToggled: {
@@ -558,12 +550,7 @@ Page {
                             font.pixelSize: 12
                             wrapMode: Text.Wrap
                         }
-                        Text {
-                            text: aiService.allowTimeRecord() ? "开" : "关"
-                            color: aiService.allowTimeRecord() ? Theme.ok : Theme.textDim
-                            font.pixelSize: 11
-                        }
-                        Switch {
+                        ThemeSwitch {
                             id: timeSwitch
                             checked: aiService.allowTimeRecord()
                             onToggled: {
@@ -583,12 +570,7 @@ Page {
                             font.pixelSize: 12
                             wrapMode: Text.Wrap
                         }
-                        Text {
-                            text: aiService.allowLongTermMemory() ? "开" : "关"
-                            color: aiService.allowLongTermMemory() ? Theme.ok : Theme.textDim
-                            font.pixelSize: 11
-                        }
-                        Switch {
+                        ThemeSwitch {
                             id: memSwitch
                             checked: aiService.allowLongTermMemory()
                             onToggled: {

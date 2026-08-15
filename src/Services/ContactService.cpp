@@ -3,6 +3,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -38,6 +39,21 @@ QString ContactService::contactAvatarPath(const QString &id) const
 {
     QString p = contactDir(id) + "/avatar.png";
     return QFile::exists(p) ? p : QString();
+}
+
+QString ContactService::contactAvatarUrl(const QString &id) const
+{
+    const QString p = contactAvatarPath(id);
+    if (p.isEmpty()) return QString();
+    // cache-buster fragment: a changed mtime forces QML Image to reload
+    const qint64 m = QFileInfo(p).lastModified().toMSecsSinceEpoch();
+    QString url = p;
+    return "file:///" + url.replace('\\', '/') + "#" + QString::number(m);
+}
+
+QString ContactService::currentAvatarUrl() const
+{
+    return contactAvatarUrl(m_currentId);
 }
 
 void ContactService::load()
@@ -221,6 +237,8 @@ QString ContactService::setCurrentAvatar(const QString &srcPath)
         p.drawImage(0, 0, sq);
         p.end();
     }
+    // NOTE: keep the avatar at its SOURCE resolution — upscaling small images
+    // blurs them. Downscale-to-display is handled sharply by QML (mipmap).
     QFile::remove(dest);
     if (out.save(dest, "PNG")) {
         emit contactsChanged();

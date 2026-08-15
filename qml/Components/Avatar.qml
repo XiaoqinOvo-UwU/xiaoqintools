@@ -17,6 +17,10 @@ Rectangle {
     radius: size / 2
     color: Theme.accent
     clip: true
+    // antialiasing smooths the circular crop edge; mipmap keeps the image
+    // crisp when a large source is scaled DOWN to a small avatar
+    antialiasing: true
+    smooth: true
     border.color: Theme.glassBorder
     border.width: 1
     scale: pressArea.pressed ? 0.92 : 1.0
@@ -27,6 +31,8 @@ Rectangle {
         visible: root.source.length > 0
         source: root.source
         fillMode: Image.PreserveAspectCrop
+        smooth: true
+        mipmap: true
     }
     Text {
         anchors.centerIn: parent

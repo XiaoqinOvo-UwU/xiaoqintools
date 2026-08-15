@@ -63,6 +63,17 @@ void AppCore::showToast(const QString &msg)
     emit toastRequested();
 }
 
+void AppCore::showIsland(const QString &message, const QStringList &options, const QString &actionId)
+{
+    m_islandActionId = actionId;
+    emit islandRequested(message, options, actionId);
+}
+
+void AppCore::selectIslandAction(int index)
+{
+    emit islandActionChosen(m_islandActionId, index);
+}
+
 bool AppCore::isProperLocation()
 {
     QString dir = QDir::toNativeSeparators(QCoreApplication::applicationDirPath());

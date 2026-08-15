@@ -110,6 +110,22 @@ QString ResponseValidator::trimToDialog(const QString &raw)
     return kept.join('\n').trimmed();
 }
 
+// drop lines where the AI describes a physical action it cannot do
+// (抱抱/点外卖/走到你身边...). Keeps the AI in online/network mode.
+QString ResponseValidator::stripPhysicalActions(const QString &raw)
+{
+    const QStringList lines = raw.split('\n');
+    QStringList kept;
+    for (const QString &line : lines) {
+        bool bad = false;
+        for (const QString &ph : FactFilter::physicalActionPhrases()) {
+            if (line.contains(ph)) { bad = true; break; }
+        }
+        if (!bad) kept << line;
+    }
+    return kept.join('\n').trimmed();
+}
+
 ResponseValidator::Result ResponseValidator::validate(const QString &raw, const QString &verifiedFacts)
 {
     Result r;
@@ -127,6 +143,9 @@ ResponseValidator::Result ResponseValidator::validate(const QString &raw, const 
     if (dropped > 0)
         r.observationsStripped = dropped;
     s = withoutObs;
+
+    // online-mode: never let the AI describe physical body actions
+    s = stripPhysicalActions(s);
 
     s = trimToDialog(s);
     s = s.trimmed();

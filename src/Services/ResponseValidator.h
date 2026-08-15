@@ -34,6 +34,7 @@ public:
     static QString stripStageDirections(const QString &raw); // (xx) *xx* narration
     static QString stripUnsupportedObservations(const QString &raw, const QString &factText);
     static QString trimToDialog(const QString &raw);         // drop quote-less narration lines
+    static QString stripPhysicalActions(const QString &raw); // online-mode: drop body-action lines
 
 private:
     static QString stripUnsupportedObservationsImpl(const QString &raw, const QString &factText,

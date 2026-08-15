@@ -48,6 +48,18 @@ const QStringList &FactFilter::stagePhrases()
     return phrases;
 }
 
+const QStringList &FactFilter::physicalActionPhrases()
+{
+    static const QStringList phrases = {
+        "抱抱", "抱你", "抱住了", "摸摸头", "摸摸你的", "拍拍", "拍你",
+        "点外卖", "帮你点", "我去点", "倒水", "给你倒", "买饭", "做饭",
+        "煮了", "泡了杯", "端来", "递给你", "走到你", "来到你", "站在你",
+        "坐在你", "在你身边", "坐到你旁边", "伸手", "敲门", "送到你家",
+        "我帮你买", "我去买", "我给你倒", "把门打开", "开着门",
+    };
+    return phrases;
+}
+
 QString FactFilter::stripUnsupportedObservations(const QString &reply, const QString &factText)
 {
     QString out = reply;

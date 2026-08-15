@@ -626,6 +626,9 @@ void AiService::idleChat()
             + "【当前会话状态】" + conversationStateBlock() + "\n"
             + "如果存在未解决的情绪事件，优先延续情绪话题，禁止切换成喝水/睡觉/健康提醒。\n"
             + "【减少固定模板】禁止'喝水/休息/吃饭'式查岗关心，按推荐话题自然延续。\n"
+            + "【交流方式——代码强制】你是网络上的线上伙伴，不是现实在场的人。禁止肢体/现实动作描述"
+              "（抱抱、摸摸头、点外卖、倒水、做饭、走到/坐在身边等）和'我帮你点/我去买'类动手说法；"
+              "关心只用文字表达，始终是屏幕两端的交流。\n"
             + "【回复格式】只输出对话内容，禁止（动作）/*动作*//旁白，25字以内一句话。\n"
             + "你的当前状态：" + aiState
             + "\n只输出这句话本身，若决定不打扰则输出空。";
@@ -771,7 +774,7 @@ QString AiService::setAiAvatar(const QString &srcPath)
     if (!p.isEmpty()) emit profileChanged();
     return p;
 }
-QString AiService::aiAvatarPath() { return ContactService::instance().currentAvatarPath(); }
+QString AiService::aiAvatarPath() { return ContactService::instance().currentAvatarUrl(); }
 
 QString AiService::apiBaseUrl() { return ConfigService::instance().baseUrl(); }
 QString AiService::apiModel() { return ConfigService::instance().model(); }
@@ -807,6 +810,8 @@ static QString copyAvatar(const QString &src, const QString &name)
         p.drawImage(0, 0, sq);
         p.end();
     }
+    // NOTE: keep the avatar at its SOURCE resolution — upscaling small images
+    // blurs them. Downscale-to-display is handled sharply by QML (mipmap).
     QFile::remove(dest);
     if (out.save(dest, "PNG")) return dest;
     return QString();
@@ -821,7 +826,10 @@ QString AiService::setUserAvatar(const QString &srcPath)
 QString AiService::userAvatarPath()
 {
     QString p = ConfigService::instance().configDir() + "/user_avatar.png";
-    return QFile::exists(p) ? p : QString();
+    if (!QFile::exists(p)) return QString();
+    // cache-buster fragment so QML reloads after a change (no restart needed)
+    const qint64 m = QFileInfo(p).lastModified().toMSecsSinceEpoch();
+    return "file:///" + p.replace('\\', '/') + "#" + QString::number(m);
 }
 
 // ---- custom wallpaper (blurred copy behind the right content pane) ----
@@ -894,9 +902,10 @@ void AiService::regenerateWallpaper()
     if (!QFile::exists(sharp)) return;
     QImage img(sharp);
     if (img.isNull()) return;
-    // downscale for the blur pass: the output is a soft background anyway, and a
-    // small image keeps the blur instant so dragging the slider never janks.
-    const int maxSide = 720;
+    // downscale for the blur pass: keep it close to the display size (1080) so
+    // the result stays sharp-ish; a small image keeps the blur instant so
+    // dragging the slider never janks.
+    const int maxSide = 1080;
     if (qMax(img.width(), img.height()) > maxSide)
         img = img.scaled(maxSide, maxSide, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     const int r = ConfigService::instance().wallpaperBlurRadius();
@@ -1466,6 +1475,11 @@ void AiService::sendMessage(const QString &text)
           "④宁可少说，不可编造。不确定就自然地问，或聊共同话题。\n"
         + "【角色边界】你是现实陪伴型AI，不是小说角色。禁止描述你做不到的动作（如'我去调整'），"
           "禁止虚构共同经历。陪伴说'我陪着你'，不说'我知道你发生了什么'。\n"
+        + "【交流方式——代码强制】你是通过网络和文字与用户交流的线上伙伴，不是现实在场的人。\n"
+          "①禁止描述任何肢体动作或现实行为：抱抱、摸摸头、拍拍、点外卖、帮你点、倒水、买饭、做饭、起身、"
+          "走到/来到/站在/坐在你身边、伸手、递给你、端茶、敲门、送到你家等——一律不得出现。\n"
+          "②禁止'我帮你点/我去买/我给你倒/我来帮你'这类实际动手的说法。\n"
+          "③关心只能通过文字表达（'记得按时吃饭哦'，而非'我给你点了外卖'）；始终是屏幕两端的交流，不是面对面。\n"
         + "【回复长度】普通聊天不超过25字，可拆成多条短句（换行分隔）；深入话题不超过80字。"
           "禁止长篇大论。允许轻微玩笑、撒娇、小情绪。\n"
         + "【回复格式】只输出对话内容本身。禁止括号动作（如（温柔地看着你））、星号动作（如*抱住你*）、"

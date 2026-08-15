@@ -297,7 +297,8 @@ Page {
                                 var clash = proxyService.hasClash()
                                 var v2ray = proxyService.hasV2ray()
                                 if (clash && v2ray) {
-                                    proxyChoice.showChoice("打开哪个梯子？", ["Clash Verge", "v2rayN"])
+                                    // single shared island (routed via AppCore)
+                                    appCore.showIsland("打开哪个梯子？", ["Clash Verge", "v2rayN"], "open_proxy")
                                 } else if (clash) {
                                     launchProxy("Clash")
                                 } else if (v2ray) {
@@ -508,18 +509,6 @@ Page {
                 var sm = text.match(/(\d+(?:\.\d+)?)\s*Mbps/i)
                 if (sm) page.speedText = sm[1] + " Mbps"
             }
-        }
-    }
-
-    // dynamic island choice toast: pick which proxy to open
-    IslandToast {
-        id: proxyChoice
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.top
-        anchors.topMargin: 16
-        z: 99
-        onActionChosen: function(index) {
-            page.launchProxy(index === 0 ? "Clash" : "v2rayN")
         }
     }
 }
