@@ -7,12 +7,18 @@
 // UI without passing through here.
 //
 // Checks:
-//  1. strip <think> blocks, <|ACT|>, <|DELAY|> control tokens
+//  1. strip <think> blocks and control tokens with or without a payload:
+//     <|ACT|>, <|ACT {...}|>, <|THINK|>, <|THINK {...}|>, <|DELAY|>, <|DELAY 1.5|>
+//     plus a final safety net that drops ANY residual <|...|> block.
 //  2. strip stage directions: （动作）、*动作*、standalone narration lines
 //  3. unsupported fabricated observations ("我看到你..." without data) are
 //     REPAIRED by ResponseRepair into natural uncertain expressions rather
 //     than simply deleted (deletion remains as a last-resort fallback)
 //  4. enforce dialog-only output (no role scripts, no narration)
+//
+// Cleanup order (mandatory):
+//   raw -> stripControlTokens -> stripStageDirections -> ResponseRepair
+//       -> dialog-only -> final safety filter -> speech
 // =====================================================================
 class ResponseValidator
 {

@@ -3,21 +3,40 @@
 #include "ResponseRepair.h"
 #include <QRegularExpression>
 
+// final safety net: nothing that starts a <| control block may reach the UI.
+// If one survives all earlier stages, drop the WHOLE block (up to the closing
+// "|>", or the rest of the line when the closing marker is missing).
+static QString dropResidualControlBlocks(const QString &s)
+{
+    QString out = s;
+    int idx;
+    while ((idx = out.indexOf(QStringLiteral("<|"))) >= 0) {
+        const int end = out.indexOf(QStringLiteral("|>"), idx + 2);
+        if (end >= 0) {
+            out = out.left(idx) + out.mid(end + 2);
+        } else {
+            const int nl = out.indexOf('\n', idx);
+            out = nl >= 0 ? (out.left(idx) + out.mid(nl)) : out.left(idx);
+        }
+    }
+    return out.trimmed();
+}
+
 QString ResponseValidator::stripControlTokens(const QString &raw)
 {
+    // known control tokens with an OPTIONAL payload:
+    //   <|ACT|> , <|ACT {json}|> , <|THINK|> , <|THINK {json}|> ,
+    //   <|DELAY|> , <|DELAY 1.5|>
+    static const QRegularExpression ctrlRe(
+        "<\\|\\s*(ACT|THINK|DELAY)(?:\\s*\\{.*?\\}|\\s+[0-9.]+)?\\s*\\|>",
+        QRegularExpression::DotMatchesEverythingOption);
+    // legacy reasoning block <think>...</think>
     static const QRegularExpression thinkRe("<think>(.*?)</think>",
                                             QRegularExpression::DotMatchesEverythingOption);
-    static const QRegularExpression actRe("<\\|\\s*ACT\\s*\\{(.*?)\\}\\s*\\|>",
-                                          QRegularExpression::DotMatchesEverythingOption);
-    static const QRegularExpression delayRe("<\\|\\s*DELAY\\s+[0-9.]+\\s*\\|>",
-                                            QRegularExpression::CaseInsensitiveOption);
     QString s = raw;
-    auto tm = thinkRe.match(s);
-    if (tm.hasMatch())
-        s = s.mid(0, tm.capturedStart()) + s.mid(tm.capturedEnd());
-    s.remove(actRe);
-    s.remove(delayRe);
-    return s;
+    s.remove(ctrlRe);
+    s.remove(thinkRe);
+    return dropResidualControlBlocks(s);
 }
 
 QString ResponseValidator::stripStageDirections(const QString &raw)
@@ -149,6 +168,8 @@ ResponseValidator::Result ResponseValidator::validate(const QString &raw, const 
 
     s = trimToDialog(s);
     s = s.trimmed();
+    // final safety filter: no control token may reach the UI
+    s = dropResidualControlBlocks(s);
 
     r.text = s;
     r.changed = (s != before);
