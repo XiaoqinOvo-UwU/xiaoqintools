@@ -277,6 +277,11 @@ void UpdateService::startDownload(const QString &url, const QString &dest)
     });
     connect(reply, &QNetworkReply::downloadProgress, this, [this](qint64 got, qint64 total) {
         m_progress = total > 0 ? (int)(got * 100 / total) : 0;
+        // debug: log milestone changes so progress behaviour is diagnosable
+        if (m_progress != m_lastLoggedProgress && (qAbs(m_progress - m_lastLoggedProgress) >= 10 || m_progress >= 100)) {
+            qWarning("[update] download %d%% (got=%lld total=%lld)", m_progress, (long long)got, (long long)total);
+            m_lastLoggedProgress = m_progress;
+        }
         emit downloadStateChanged();
     });
     connect(reply, &QNetworkReply::finished, this, [this, reply, out, dest]() {

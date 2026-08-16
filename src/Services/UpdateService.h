@@ -52,5 +52,6 @@ private:
     QString m_lastError;        // human-readable last check error (empty = ok)
     bool m_downloading = false;
     int m_progress = 0;
+    int m_lastLoggedProgress = -1;  // progress milestone already logged (debug)
     QNetworkAccessManager *m_mgr = nullptr;
 };

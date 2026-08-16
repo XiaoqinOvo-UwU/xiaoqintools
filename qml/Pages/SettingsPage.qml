@@ -509,6 +509,10 @@ Page {
                                 visible: updateService.downloading
                                 from: 0; to: 100
                                 value: updateService.downloadProgress
+                                // while the speed probe / first bytes arrive
+                                // (0% known yet) show an animated indeterminate
+                                // sweep so the bar never looks frozen or full.
+                                indeterminate: updateService.downloading && updateService.downloadProgress <= 0
                                 height: 6
                                 // NOTE: Qt6 does NOT auto-scale a custom
                                 // contentItem width to visualPosition — it gets
