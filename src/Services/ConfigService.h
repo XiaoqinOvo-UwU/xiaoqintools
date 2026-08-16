@@ -40,6 +40,12 @@ public:
     double wallpaperBrightness() const { return m_wallpaperBrightness; }
     void setWallpaperBrightness(double v) { m_wallpaperBrightness = qBound(0.0, v, 1.0); save(); }
 
+    // appearance mode: "" = 默认深色 | "glass" = 壁纸玻璃
+    QString appearanceMode() const { return m_appearanceMode; }
+    double  wallpaperGlassOpacity() const { return m_wallpaperGlassOpacity; }
+    void setAppearanceMode(const QString &v) { m_appearanceMode = v; save(); }
+    void setWallpaperGlassOpacity(double v) { m_wallpaperGlassOpacity = qBound(0.05, v, 0.20); save(); }
+
     void setBaseUrl(const QString &v) { m_baseUrl = v; save(); }
     void setModel(const QString &v) { m_model = v; save(); }
     void setApiKey(const QString &v) { m_apiKey = v; save(); }
@@ -75,4 +81,6 @@ private:
     bool m_wallpaperBlurEnabled = true;
     int  m_wallpaperBlurRadius = 12;   // subtle frosted by default
     double m_wallpaperBrightness = 0.5;
+    QString m_appearanceMode;          // "" | "glass"
+    double m_wallpaperGlassOpacity = 0.10; // wallpaper layer opacity in glass mode
 };

@@ -262,7 +262,7 @@ Page {
         anchors.centerIn: Overlay.overlay
         title: "开机自启项"
         background: Rectangle {
-            color: Theme.surface
+            color: Theme.cardFill
             radius: 12
             border.color: Theme.glassBorder
             border.width: 1
@@ -344,7 +344,7 @@ Page {
         modal: true
         anchors.centerIn: Overlay.overlay
         background: Rectangle {
-            color: Theme.surface
+            color: Theme.cardFill
             radius: 12
             border.color: Theme.glassBorder
             border.width: 1

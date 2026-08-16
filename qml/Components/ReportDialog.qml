@@ -14,7 +14,7 @@ Dialog {
     title: "使用报告"
 
     background: Rectangle {
-        color: Theme.surface
+        color: Theme.cardFill
         radius: 12
         border.color: Theme.glassBorder
         border.width: 1

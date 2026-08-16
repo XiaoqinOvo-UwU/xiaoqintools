@@ -6,20 +6,20 @@ Rectangle {
     id: card
     property string title: ""
     property string desc: ""
-    property color textColor: "#FFFFFF"
+    property color textColor: Theme.text
     property bool hovered: false
     property bool pressed: false
     signal clicked()
 
-    // dark action card by default; wallpaper on -> near-opaque dark (no white
-    // acrylic glass). No glassmorphism when the wallpaper is active.
+    // material follows Theme tokens (solid dark / wallpaper translucent /
+    // glass) so the Wallpaper Glass mode applies automatically.
     implicitWidth: 180
     implicitHeight: 92
     radius: 12
-    color: pressed ? (Theme.wallpaperActive ? Qt.rgba(44/255,44/255,44/255,0.93) : Qt.rgba(255,255,255,0.18))
-         : hovered ? (Theme.wallpaperActive ? Qt.rgba(40/255,40/255,40/255,0.93) : Qt.rgba(255,255,255,0.12))
-         : (Theme.wallpaperActive ? Qt.rgba(34/255,34/255,34/255,0.93) : Qt.rgba(255,255,255,0.06))
-    border.color: Qt.rgba(255,255,255,0.10)
+    color: pressed ? Theme.cardFillPress
+         : hovered ? Theme.cardFillHover
+         : Theme.cardFill
+    border.color: Theme.glassBorder
     border.width: 1
 
     MouseArea {
@@ -51,7 +51,7 @@ Rectangle {
         }
         Text {
             text: card.desc
-            color: "#A8B5C4"
+            color: Theme.textDim
             font.pixelSize: 12
             wrapMode: Text.Wrap
         }

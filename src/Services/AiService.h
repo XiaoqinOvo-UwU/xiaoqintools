@@ -103,6 +103,13 @@ public:
     Q_INVOKABLE int wallpaperBlurRadius();
     Q_INVOKABLE void setWallpaperBlurRadius(int r);       // 0..40, regenerates the blurred copy
     Q_INVOKABLE double wallpaperBrightness();             // 0..1 average luminance (drives dark overlay)
+    Q_INVOKABLE QString wallpaperTintColor();             // "#rrggbb" average colour — glass-mode environment tint
+
+    // ---- appearance mode (wallpaper glass) ----
+    Q_INVOKABLE QString appearanceMode();                 // "" (默认深色) | "glass" (壁纸玻璃)
+    Q_INVOKABLE void setAppearanceMode(const QString &v);
+    Q_INVOKABLE double wallpaperGlassOpacity();           // wallpaper layer opacity 0.05..0.20
+    Q_INVOKABLE void setWallpaperGlassOpacity(double v);
 
     // lifecycle: call on app start / exit to record sessions
     Q_INVOKABLE void recordSessionStart();

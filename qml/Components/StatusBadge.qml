@@ -13,7 +13,7 @@ Rectangle {
     implicitWidth: labelText.implicitWidth + Theme.sp3 * 2 + 8 + Theme.sp2 + 2
     radius: 12
     color: "transparent"
-    border.color: Qt.rgba(1,1,1,0.12)
+    border.color: Theme.glassBorder
     border.width: 1
 
     property color stateColor: {
@@ -22,7 +22,7 @@ Rectangle {
         case "warn":  return Theme.warn
         case "error": return Theme.danger
         case "busy":  return Theme.warn
-        default:      return Theme.textDim
+        default:      return Theme.statusIdle   // visible on light glass too
         }
     }
 

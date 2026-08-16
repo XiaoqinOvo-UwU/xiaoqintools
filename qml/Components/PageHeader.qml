@@ -26,7 +26,7 @@ Item {
         spacing: 2
         Text {
             text: root.title
-            color: "white"
+            color: Theme.text
             font.pixelSize: Theme.fsPage
             font.bold: true
         }

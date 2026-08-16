@@ -214,7 +214,7 @@ Rectangle {
                 id: emotionBadge
                 width: 26; height: 26
                 radius: 13
-                color: Theme.surface
+                color: Theme.cardFill
                 border.color: Theme.glassBorder
                 border.width: 1
                 anchors.left: parent.left

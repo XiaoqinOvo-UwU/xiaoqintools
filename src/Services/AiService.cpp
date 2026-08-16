@@ -324,6 +324,24 @@ bool AiService::isDoNotDisturb() { return !m_dndReason.isEmpty(); }
 QString AiService::doNotDisturbReason() { return m_dndReason; }
 int AiService::lastProactiveScore() { return m_lastProactiveScore; }
 
+// ---- appearance mode (wallpaper glass) — passthrough to ConfigService ----
+QString AiService::appearanceMode() { return ConfigService::instance().appearanceMode(); }
+void AiService::setAppearanceMode(const QString &v) { ConfigService::instance().setAppearanceMode(v == "glass" ? "glass" : QString()); }
+double AiService::wallpaperGlassOpacity() { return ConfigService::instance().wallpaperGlassOpacity(); }
+void AiService::setWallpaperGlassOpacity(double v) { ConfigService::instance().setWallpaperGlassOpacity(v); }
+
+// average colour of the wallpaper — drives the glass-mode environment tint so
+// the wallpaper's hue bleeds into the frosted panels ("环境色融合").
+QString AiService::wallpaperTintColor()
+{
+    const QString sharp = ConfigService::instance().configDir() + "/wallpaper.png";
+    if (!QFile::exists(sharp)) return "#FFFFFF";
+    QImage img(sharp);
+    if (img.isNull()) return "#FFFFFF";
+    const QImage small = img.scaled(1, 1, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    return small.pixelColor(0, 0).name();
+}
+
 // ---- novel edit counting (scan C:\AI库\小说 for yesterday-modified .md files) ----
 static int countNovelEditsYesterday()
 {
@@ -999,6 +1017,8 @@ QString AiService::wallpaperPath()
     const QString sharp = dir + "/wallpaper.png";
     if (!QFile::exists(sharp)) return QString();
     QString f;
+    // frosted-glass blur now happens in QML (GlassMaterial FastBlur); the
+    // C++ copy is only used when the user explicitly enables 模糊背景.
     if (ConfigService::instance().wallpaperBlurEnabled()) {
         const QString blurred = dir + "/wallpaper_blur.png";
         if (QFile::exists(blurred)) f = blurred;

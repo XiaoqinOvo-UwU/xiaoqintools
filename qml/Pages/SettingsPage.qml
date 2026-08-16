@@ -14,12 +14,25 @@ Page {
     property string note: ""
     property string wpPreviewUrl: ""   // current wallpaper thumbnail (file:// url)
     property int wpPreset: -1          // which built-in preset is active (-1 = custom/none)
+    property string appMode: ""        // "" 默认深色 | "glass" 壁纸玻璃
+
+    // real-time appearance switch: update the Theme singleton (every token
+    // re-renders) + persist via AiService.
+    function applyAppearance(mode) {
+        root.appMode = (mode === "glass") ? "glass" : ""
+        Theme.appearanceMode = root.appMode
+        aiService.setAppearanceMode(root.appMode)
+    }
 
     Connections {
         target: aiService
         function onWallpaperChanged() { root.wpPreviewUrl = aiService.wallpaperPath() }
     }
-    Component.onCompleted: root.wpPreviewUrl = aiService.wallpaperPath()
+    Component.onCompleted: {
+        root.wpPreviewUrl = aiService.wallpaperPath()
+        root.appMode = aiService.appearanceMode()
+        Theme.appearanceMode = root.appMode
+    }
 
     // fixed header + scrollable body — same top slot as other pages
     ColumnLayout {
@@ -63,13 +76,13 @@ Page {
                     anchors.topMargin: 18
                     spacing: 10
 
-                    Text { text: "梯子路径"; color: "white"; font.pixelSize: 15; font.bold: true }
+                    Text { text: "梯子路径"; color: Theme.text; font.pixelSize: 15; font.bold: true }
 
                     Text { text: "Clash Verge"; color: Theme.textDim; font.pixelSize: 12 }
                     TextField {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
-                        color: "white"
+                        color: Theme.text
                         padding: 8
                         placeholderText: "自动检测"
                         placeholderTextColor: Theme.textDim
@@ -80,7 +93,7 @@ Page {
                     TextField {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
-                        color: "white"
+                        color: Theme.text
                         placeholderText: "自动检测"
                         placeholderTextColor: Theme.textDim
                         text: proxyService.v2rayExe()
@@ -108,13 +121,13 @@ Page {
                     anchors.topMargin: 18
                     spacing: 10
 
-                    Text { text: "AI 配置"; color: "white"; font.pixelSize: 15; font.bold: true }
+                    Text { text: "AI 配置"; color: Theme.text; font.pixelSize: 15; font.bold: true }
                     Text { text: "Base URL"; color: Theme.textDim; font.pixelSize: 12 }
                     TextField {
                         id: editBaseUrl
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
-                        color: "white"
+                        color: Theme.text
                         placeholderText: "https://api.deepseek.com/v1"
                         placeholderTextColor: Theme.textDim
                         text: aiService.apiBaseUrl()
@@ -125,7 +138,7 @@ Page {
                         id: editModel
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
-                        color: "white"
+                        color: Theme.text
                         placeholderText: "deepseek-chat"
                         placeholderTextColor: Theme.textDim
                         text: aiService.apiModel()
@@ -136,7 +149,7 @@ Page {
                         id: editApiKey
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
-                        color: "white"
+                        color: Theme.text
                         placeholderText: "sk-..."
                         placeholderTextColor: Theme.textDim
                         text: aiService.apiKey()
@@ -197,7 +210,7 @@ Page {
                         spacing: 12
                         Text {
                             text: "自定义壁纸"
-                            color: "white"; font.pixelSize: 15; font.bold: true
+                            color: Theme.text; font.pixelSize: 15; font.bold: true
                             Layout.fillWidth: true
                         }
                         // thumbnail preview of the current wallpaper
@@ -374,6 +387,118 @@ Page {
                 }
             }
 
+            // ---- appearance mode (wallpaper glass) ----
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: colApp.implicitHeight + 36
+                color: Theme.cardFill
+                radius: 12
+                border.color: Qt.rgba(255,255,255,0.10)
+                border.width: 1
+
+                ColumnLayout {
+                    id: colApp
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.leftMargin: 18
+                    anchors.rightMargin: 18
+                    anchors.topMargin: 18
+                    spacing: 12
+
+                    Text { text: "外观模式"; color: Theme.text; font.pixelSize: 15; font.bold: true }
+                    Text {
+                        Layout.fillWidth: true
+                        text: "白色玻璃：UI 变成低亮度白色磨砂玻璃悬浮在壁纸上（Apple Acrylic / VisionOS 风格），低调不抢视觉"
+                        color: Theme.textDim
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        // 默认深色
+                        Rectangle {
+                            id: modeDark
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 46
+                            radius: Theme.rMd
+                            color: root.appMode === "" ? Qt.rgba(255,255,255,0.14)
+                                                       : Qt.rgba(255,255,255,0.05)
+                            border.color: root.appMode === "" ? Theme.ok : Qt.rgba(255,255,255,0.10)
+                            border.width: 1
+                            Behavior on color { ColorAnimation { duration: Theme.durFast } }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 14
+                                anchors.rightMargin: 14
+                                Text {
+                                    text: "默认深色"
+                                    color: Theme.text
+                                    font.pixelSize: 13
+                                    font.bold: root.appMode === ""
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: root.appMode === "" ? "✓" : ""
+                                    color: Theme.ok
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: root.applyAppearance("")
+                            }
+                        }
+                        // 壁纸玻璃
+                        Rectangle {
+                            id: modeGlass
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 46
+                            radius: Theme.rMd
+                            color: root.appMode === "glass" ? Qt.rgba(255,255,255,0.14)
+                                                            : Qt.rgba(255,255,255,0.05)
+                            border.color: root.appMode === "glass" ? Theme.ok : Qt.rgba(255,255,255,0.10)
+                            border.width: 1
+                            Behavior on color { ColorAnimation { duration: Theme.durFast } }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 14
+                                anchors.rightMargin: 14
+                                Text {
+                                    text: "白色玻璃"
+                                    color: Theme.text
+                                    font.pixelSize: 13
+                                    font.bold: root.appMode === "glass"
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: root.appMode === "glass" ? "✓" : ""
+                                    color: Theme.ok
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: root.applyAppearance("glass")
+                            }
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        visible: root.appMode === "glass" && root.wpPreviewUrl.length === 0
+                        text: "提示：请先在「自定义壁纸」里设置壁纸，玻璃效果才会显现"
+                        color: Theme.warn
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+
             FileDialog {
                 id: wallpaperFileDialog
                 title: "选择壁纸"
@@ -409,7 +534,7 @@ Page {
                     anchors.topMargin: 18
                     spacing: 10
 
-                    Text { text: "维护"; color: "white"; font.pixelSize: 15; font.bold: true }
+                    Text { text: "维护"; color: Theme.text; font.pixelSize: 15; font.bold: true }
 
                     Text {
                         Layout.fillWidth: true
@@ -553,7 +678,7 @@ Page {
                     }
 
                     // ---- privacy toggles ----
-                    Text { text: "隐私与陪伴"; color: "white"; font.pixelSize: 15; font.bold: true; Layout.topMargin: 8 }
+                    Text { text: "隐私与陪伴"; color: Theme.text; font.pixelSize: 15; font.bold: true; Layout.topMargin: 8 }
 
                     RowLayout {
                         Layout.fillWidth: true

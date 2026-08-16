@@ -21,7 +21,7 @@ Rectangle {
     color: root.pressed ? Theme.cardFillPress
          : root.hovered ? Theme.cardFillHover
          : root.glass
-    border.color: Theme.wallpaperActive ? Qt.rgba(255,255,255,0.08) : Theme.glassBorder
+    border.color: Theme.glassBorder
     radius: Theme.rXl
     border.width: 1
     clip: true

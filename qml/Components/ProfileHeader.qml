@@ -12,7 +12,7 @@ Rectangle {
     property bool statusOnline: true
     signal avatarClicked()
 
-    color: Theme.surface
+    color: Theme.cardFill
     radius: Theme.rXl
     border.color: Theme.glassBorder
     border.width: 1

@@ -31,9 +31,9 @@ Rectangle {
     implicitHeight: Math.max(36, (root.typing ? dotsRow.height : txt.implicitHeight) + 18)
 
     radius: Theme.rXl
-    // AI bubble: near-opaque dark (wallpaper never shows through).
-    // User bubble: opaque theme accent — never transparent.
-    color: isAi ? (Theme.wallpaperActive ? Qt.rgba(37/255, 37/255, 37/255, 0.95) : Theme.surface) : Theme.accent
+    // AI bubble: light frosted glass on glass mode (Theme.aiBubbleFill).
+    // User bubble: opaque accent — its text uses Theme.onUserBubble (white).
+    color: isAi ? Theme.aiBubbleFill : Theme.userBubbleFill
     border.color: isAi ? Theme.glassBorder : "transparent"
     border.width: 1
 
@@ -44,7 +44,7 @@ Rectangle {
         anchors.margins: root.txtPad
         visible: !root.typing
         text: root.text
-        color: Theme.text
+        color: isAi ? Theme.text : Theme.onUserBubble
         font.pixelSize: Theme.fsBody
         wrapMode: Text.Wrap
         textFormat: Text.PlainText

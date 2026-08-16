@@ -56,6 +56,8 @@ ApplicationWindow {
         root.wallpaperUrl = aiService.wallpaperPath()
         root.wallpaperBrightness = aiService.wallpaperBrightness()
         Theme.wallpaperActive = root.wallpaperUrl.length > 0
+        Theme.wallpaperTint = aiService.wallpaperTintColor()   // environment tint for glass mode
+        root.syncAppearance()
         // crossfade only when switching between two real wallpapers (300ms)
         if (oldUrl.length > 0 && root.wallpaperUrl.length > 0 && oldUrl !== root.wallpaperUrl) {
             wpFront.source = root.wallpaperUrl
@@ -64,6 +66,12 @@ ApplicationWindow {
         } else if (oldUrl.length === 0 && root.wallpaperUrl.length > 0) {
             wpBack.source = root.wallpaperUrl   // first set: just show
         }
+    }
+    // sync the persisted appearance mode into the Theme singleton so every
+    // Theme.* token re-renders (real-time switching works from SettingsPage)
+    function syncAppearance() {
+        Theme.appearanceMode = aiService.appearanceMode()
+        Theme.glassOpacity = aiService.wallpaperGlassOpacity()
     }
     Connections {
         target: aiService
@@ -260,7 +268,7 @@ ApplicationWindow {
                             Text {
                                 id: userNameText
                                 text: aiService.userName()
-                                color: Theme.text
+                                color: Theme.navText
                                 font.pixelSize: 15
                                 font.bold: true
                             }
@@ -271,7 +279,7 @@ ApplicationWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     color: Theme.ok
                                 }
-                                Text { text: appCore.statusText; color: Theme.textDim; font.pixelSize: 11 }
+                                Text { text: appCore.statusText; color: Theme.navTextDim; font.pixelSize: 11 }
                             }
                         }
 
@@ -281,7 +289,7 @@ ApplicationWindow {
                         // because MouseArea.hovered is unavailable in this Qt build
                         Text {
                             text: "⌄"
-                            color: Theme.textDim
+                            color: Theme.navTextDim
                             font.pixelSize: 16
                             visible: root.userBtnHover
                             opacity: root.userBtnHover ? 1 : 0
@@ -303,7 +311,7 @@ ApplicationWindow {
                     id: userMenu
                     width: 200
                     background: Rectangle {
-                        color: Theme.surface
+                        color: Theme.cardFill
                         radius: 10
                         border.color: Theme.glassBorder
                         border.width: 1
@@ -358,7 +366,7 @@ ApplicationWindow {
                             width: 3; height: cid === contactService.currentId() ? 24 : 0
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: parent.left
-                            color: Theme.textDim
+                            color: Theme.navTextDim
                             radius: 1.5
                             opacity: cid === contactService.currentId() ? 1 : 0
                             Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
@@ -412,14 +420,14 @@ ApplicationWindow {
                                 spacing: 1
                                 Text {
                                     text: cname
-                                    color: Theme.text
+                                    color: Theme.navText
                                     font.pixelSize: 13
                                     font.bold: cid === contactService.currentId()
                                 }
                                 // live conversation preview (last message), falls back to a hint
                                 Text {
                                     text: lastMsg.length > 0 ? lastMsg : "点击开始聊天"
-                                    color: Theme.textDim
+                                    color: Theme.navTextDim
                                     font.pixelSize: 10
                                     elide: Text.ElideRight
                                     maximumLineCount: 1
@@ -428,7 +436,7 @@ ApplicationWindow {
                             }
                             Text {
                                 text: "›"
-                                color: Theme.textDim
+                                color: Theme.navTextDim
                                 font.pixelSize: 15
                             }
                         }
@@ -461,13 +469,13 @@ ApplicationWindow {
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "还没有 AI 联系人"
-                        color: Theme.textDim
+                        color: Theme.navTextDim
                         font.pixelSize: Theme.fsSmall
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "去「设置 → AI 配置」添加第一个 AI 吧"
-                        color: Theme.textMuted
+                        color: Theme.navTextMuted
                         font.pixelSize: Theme.fsCaption
                     }
                 }
@@ -511,7 +519,7 @@ ApplicationWindow {
                             width: 2; height: active ? 20 : 0
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: parent.left
-                            color: Theme.text
+                            color: Theme.navText
                             radius: 1
                             opacity: active ? 1 : 0
                             Behavior on height { NumberAnimation { duration: Theme.durMid; easing.type: Easing.OutCubic } }
@@ -533,7 +541,7 @@ ApplicationWindow {
                             spacing: Theme.sp3
                             Text {
                                 text: model.label
-                                color: active ? Theme.text : Theme.textDim
+                                color: active ? Theme.navText : Theme.navTextDim
                                 font.pixelSize: Theme.fsDefault
                                 font.weight: active ? Font.DemiBold : Font.Normal
                             }
@@ -557,7 +565,7 @@ ApplicationWindow {
                     Text {
                         anchors.centerIn: parent
                         text: "小钦的工具 v" + updateService.currentVersion()
-                        color: Theme.textDim
+                        color: Theme.navTextDim
                         font.pixelSize: Theme.fsCaption
                     }
                 }
@@ -571,8 +579,7 @@ ApplicationWindow {
             color: "transparent"
 
             // ================= LAYER 1: WALLPAPER BACKGROUND =================
-            // Only this layer shows the wallpaper — at 20% opacity so it can
-            // NEVER wash out the UI. 300ms crossfade on change.
+            // Only this layer shows the wallpaper. 300ms crossfade on change.
             Item {
                 anchors.fill: parent
                 visible: root.wallpaperUrl.length > 0
@@ -583,7 +590,8 @@ ApplicationWindow {
                     fillMode: Image.PreserveAspectCrop
                     smooth: true
                     mipmap: true
-                    opacity: 0.20
+                    // 默认深色: 20% ambient; 玻璃模式: 60% wallpaper opacity
+                    opacity: Theme.glassMode ? 0.60 : 0.20
                 }
                 Image {
                     id: wpFront
@@ -601,13 +609,22 @@ ApplicationWindow {
                 }
             }
 
-            // ================= LAYER 2: DARK OVERLAY =================
-            // Adapts to the wallpaper brightness (0.45 dark .. 0.65 bright).
+            // ================= LAYER 2: OVERLAY =================
+            // Dark mode: dark overlay adapting to wallpaper brightness.
+            // Glass mode: 10% black press-down (压暗).
             Rectangle {
                 anchors.fill: parent
                 color: root.wallpaperUrl.length > 0
-                     ? Qt.rgba(0, 0, 0, 0.45 + 0.20 * root.wallpaperBrightness)
+                     ? Qt.rgba(0, 0, 0, Theme.glassMode
+                                          ? 0.10
+                                          : 0.45 + 0.20 * root.wallpaperBrightness)
                      : "transparent"
+            }
+            // glass mode: 30% dark-blue wash (深蓝色) over the wallpaper
+            Rectangle {
+                anchors.fill: parent
+                visible: Theme.glassMode && root.wallpaperUrl.length > 0
+                color: Qt.rgba(10/255, 20/255, 60/255, 0.30)
             }
 
             // subtle vignette: darken the extreme top/bottom edges so cards and
@@ -755,7 +772,7 @@ ApplicationWindow {
         modal: true
         padding: 18
         background: Rectangle {
-            color: Theme.surface
+            color: Theme.cardFill
             radius: 14
             border.color: Theme.glassBorder
             border.width: 1

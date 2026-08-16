@@ -50,6 +50,8 @@ void ConfigService::load()
     if (o.contains("wallpaper_blur_enabled")) m_wallpaperBlurEnabled = o.value("wallpaper_blur_enabled").toBool(true);
     if (o.contains("wallpaper_blur_radius")) m_wallpaperBlurRadius = qBound(0, o.value("wallpaper_blur_radius").toInt(24), 40);
     if (o.contains("wallpaper_brightness")) m_wallpaperBrightness = qBound(0.0, o.value("wallpaper_brightness").toDouble(0.5), 1.0);
+    if (o.contains("appearance_mode")) m_appearanceMode = o.value("appearance_mode").toString();
+    if (o.contains("wallpaper_glass_opacity")) m_wallpaperGlassOpacity = qBound(0.05, o.value("wallpaper_glass_opacity").toDouble(0.10), 0.20);
     f.close();
 }
 
@@ -71,6 +73,8 @@ void ConfigService::save()
     o.insert("wallpaper_blur_enabled", m_wallpaperBlurEnabled);
     o.insert("wallpaper_blur_radius", m_wallpaperBlurRadius);
     o.insert("wallpaper_brightness", m_wallpaperBrightness);
+    o.insert("appearance_mode", m_appearanceMode);
+    o.insert("wallpaper_glass_opacity", m_wallpaperGlassOpacity);
     QFile f(configPath());
     if (!f.open(QIODevice::WriteOnly)) return;
     f.write(QJsonDocument(o).toJson());

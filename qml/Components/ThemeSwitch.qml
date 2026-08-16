@@ -14,7 +14,7 @@ Switch {
         anchors.verticalCenter: parent.verticalCenter
         width: 40; height: 22
         radius: 11
-        color: root.checked ? (Theme.wallpaperActive ? Qt.rgba(95/255, 168/255, 122/255, 0.92) : Theme.ok)
+        color: root.checked ? Theme.ok
                             : Theme.hoverBgStrong
         border.color: Qt.rgba(255,255,255,0.10)
         border.width: 1

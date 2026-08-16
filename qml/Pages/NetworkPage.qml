@@ -20,7 +20,7 @@ Page {
     property string lastUpdateText: "--:--:--"
     property string lastLatency: "--"
 
-    property color qualityColor: Theme.textDim
+    property color qualityColor: Theme.statusIdle
     property int qualityPercent: 0
     property string qualityDesc: "等待检测"
 

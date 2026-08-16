@@ -13,7 +13,7 @@ Rectangle {
     property bool busy: false          // show "进行中…" instead of content
     property string emptyHint: ""      // shown when text is empty and idle
 
-    color: Theme.surface
+    color: Theme.cardFill
     radius: Theme.rLg
     border.color: Theme.glassBorder
     border.width: 1

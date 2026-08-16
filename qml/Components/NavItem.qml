@@ -26,7 +26,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
         anchors.leftMargin: 2
-        color: Theme.text
+        color: Theme.navText
         radius: 1.5
         opacity: selected ? 1 : 0
         Behavior on height { NumberAnimation { duration: Theme.durMid; easing.type: Easing.OutCubic } }
@@ -40,7 +40,7 @@ Rectangle {
         spacing: Theme.sp3
         Text {
             text: root.iconText
-            color: selected ? Theme.text : Theme.textDim
+            color: selected ? Theme.navText : Theme.navTextDim
             font.pixelSize: Theme.fsDefault
             Layout.preferredWidth: 20
             opacity: selected ? 1 : 0.75
@@ -48,7 +48,7 @@ Rectangle {
         }
         Text {
             text: root.label
-            color: selected ? Theme.text : Theme.textDim
+            color: selected ? Theme.navText : Theme.navTextDim
             font.pixelSize: Theme.fsDefault
             font.bold: selected
         }

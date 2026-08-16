@@ -37,7 +37,7 @@ Dialog {
     }
 
     background: Rectangle {
-        color: Theme.bg
+        color: Theme.cardFill
         radius: Theme.rXl
         border.color: Theme.glassBorder
         border.width: 1

@@ -17,7 +17,7 @@ Row {
         height: 14
         radius: 1.5
         anchors.verticalCenter: parent.verticalCenter
-        color: Theme.accent
+        color: Theme.sectionBar
     }
     Text {
         text: root.text

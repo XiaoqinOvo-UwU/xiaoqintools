@@ -266,7 +266,7 @@ Page {
         padding: 16
         anchors.centerIn: Overlay.overlay
         background: Rectangle {
-            color: Theme.surface
+            color: Theme.cardFill
             radius: 16
             border.color: Qt.rgba(255/255,180/255,220/255,0.25)
             border.width: 1
