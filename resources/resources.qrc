@@ -23,11 +23,20 @@
         <file>../qml/Components/ResultPanel.qml</file>
         <file>../qml/Components/IconButton.qml</file>
         <file>../qml/Components/WindowButton.qml</file>
+        <file>../qml/Components/SettingsSectionCard.qml</file>
+        <file>../qml/Components/ThemedTextField.qml</file>
+        <file>../qml/Components/ProfileEditDialog.qml</file>
+        <file>../qml/Components/AiProfileDialogs.qml</file>
         <file>../qml/Components/qmldir</file>
         <file>../qml/Pages/NetworkPage.qml</file>
         <file>../qml/Pages/SystemPage.qml</file>
         <file>../qml/Pages/EntertainmentPage.qml</file>
         <file>../qml/Pages/SettingsPage.qml</file>
+        <file>../qml/Pages/settings/ProxySection.qml</file>
+        <file>../qml/Pages/settings/AiConfigSection.qml</file>
+        <file>../qml/Pages/settings/WallpaperSection.qml</file>
+        <file>../qml/Pages/settings/AppearanceSection.qml</file>
+        <file>../qml/Pages/settings/MaintenanceSection.qml</file>
         <file>icons/app.ico</file>
         <file>notify.wav</file>
     </qresource>

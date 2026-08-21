@@ -915,6 +915,8 @@ QString AiService::apiKey() { return ConfigService::instance().apiKey(); }
 void AiService::setApiBaseUrl(const QString &v) { ConfigService::instance().setBaseUrl(v); }
 void AiService::setApiModel(const QString &v) { ConfigService::instance().setModel(v); }
 void AiService::setApiKey(const QString &v) { ConfigService::instance().setApiKey(v); }
+QString AiService::apiKeyFor(const QString &baseUrl) { return ConfigService::instance().apiKeyFor(baseUrl); }
+void AiService::rememberApiKeyFor(const QString &baseUrl, const QString &key) { ConfigService::instance().rememberApiKeyFor(baseUrl, key); }
 
 static QString copyAvatar(const QString &src, const QString &name)
 {

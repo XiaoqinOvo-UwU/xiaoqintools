@@ -38,6 +38,7 @@ void ConfigService::load()
     if (o.contains("base_url")) m_baseUrl = o.value("base_url").toString();
     if (o.contains("model")) m_model = o.value("model").toString();
     if (o.contains("api_key")) m_apiKey = o.value("api_key").toString();
+    if (o.contains("api_keys")) m_apiKeys = o.value("api_keys").toObject();
     if (o.contains("clash_path")) m_clashPath = o.value("clash_path").toString();
     if (o.contains("v2ray_path")) m_v2rayPath = o.value("v2ray_path").toString();
     if (o.contains("user_name")) m_userName = o.value("user_name").toString();
@@ -61,6 +62,7 @@ void ConfigService::save()
     o.insert("base_url", m_baseUrl);
     o.insert("model", m_model);
     o.insert("api_key", m_apiKey);
+    o.insert("api_keys", m_apiKeys);
     o.insert("clash_path", m_clashPath);
     o.insert("v2ray_path", m_v2rayPath);
     o.insert("user_name", m_userName);

@@ -88,6 +88,9 @@ public:
     Q_INVOKABLE void setApiBaseUrl(const QString &v);
     Q_INVOKABLE void setApiModel(const QString &v);
     Q_INVOKABLE void setApiKey(const QString &v);
+    // per-provider key memory (preset switching restores the right key)
+    Q_INVOKABLE QString apiKeyFor(const QString &baseUrl);
+    Q_INVOKABLE void rememberApiKeyFor(const QString &baseUrl, const QString &key);
 
     // avatar images: copy a local image into app data, return stored path
     Q_INVOKABLE QString setUserAvatar(const QString &srcPath);

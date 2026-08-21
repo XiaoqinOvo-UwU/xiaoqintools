@@ -1,5 +1,7 @@
 singleton Theme 1.0 Theme.qml
 ThemeSwitch 1.0 ThemeSwitch.qml
+SettingsSectionCard 1.0 SettingsSectionCard.qml
+ThemedTextField 1.0 ThemedTextField.qml
 Avatar 1.0 Avatar.qml
 Card 1.0 Card.qml
 NavItem 1.0 NavItem.qml
@@ -7,6 +9,8 @@ SettingsItem 1.0 SettingsItem.qml
 SettingCard 1.0 SettingCard.qml
 MessageBubble 1.0 MessageBubble.qml
 DialogContainer 1.0 DialogContainer.qml
+ProfileEditDialog 1.0 ProfileEditDialog.qml
+AiProfileDialogs 1.0 AiProfileDialogs.qml
 ProfileHeader 1.0 ProfileHeader.qml
 SectionLabel 1.0 SectionLabel.qml
 StatusBadge 1.0 StatusBadge.qml

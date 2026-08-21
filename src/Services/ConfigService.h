@@ -13,6 +13,11 @@ public:
     QString baseUrl() const { return m_baseUrl; }
     QString model() const { return m_model; }
     QString apiKey() const { return m_apiKey; }
+
+    // per-provider key memory: baseUrl -> last used api key (preset switching)
+    QString apiKeyFor(const QString &baseUrl) const { return m_apiKeys.value(baseUrl).toString(); }
+    void rememberApiKeyFor(const QString &baseUrl, const QString &key) { m_apiKeys.insert(baseUrl, key); save(); }
+
     QString clashPath() const { return m_clashPath; }
     QString v2rayPath() const { return m_v2rayPath; }
 
@@ -69,6 +74,7 @@ private:
     QString m_baseUrl = "https://api.deepseek.com/v1";
     QString m_model = "deepseek-chat";
     QString m_apiKey;
+    QJsonObject m_apiKeys;             // baseUrl -> last used key
     QString m_clashPath;
     QString m_v2rayPath;
     QString m_userName = "用户";
