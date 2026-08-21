@@ -91,6 +91,13 @@ public:
     // per-provider key memory (preset switching restores the right key)
     Q_INVOKABLE QString apiKeyFor(const QString &baseUrl);
     Q_INVOKABLE void rememberApiKeyFor(const QString &baseUrl, const QString &key);
+    // query {base}/models with the given key -> supported model ids ("" if error)
+    Q_INVOKABLE QStringList fetchAvailableModels(const QString &baseUrl, const QString &apiKey);
+    // dedicated custom slot (never overwritten by presets)
+    Q_INVOKABLE QString customBaseUrl();
+    Q_INVOKABLE QString customModel();
+    Q_INVOKABLE QString customApiKey();
+    Q_INVOKABLE void setCustomApi(const QString &url, const QString &model, const QString &key);
 
     // avatar images: copy a local image into app data, return stored path
     Q_INVOKABLE QString setUserAvatar(const QString &srcPath);

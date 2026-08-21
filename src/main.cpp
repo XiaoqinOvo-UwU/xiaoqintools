@@ -34,6 +34,17 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(NIGHTLOG_VERSION);
     app.setWindowIcon(QIcon(":/icons/app.ico"));
 
+    // ---- single instance guard ----
+    // A second instance would hold a stale ConfigService snapshot and its
+    // next save() would clobber whatever the first instance wrote (the
+    // "settings don't stick" bug). Named mutex works across integrity
+    // levels (elevated vs normal), unlike a QLocalServer pipe.
+#ifdef Q_OS_WIN
+    HANDLE instanceMutex = CreateMutexW(nullptr, TRUE, L"Local\\XiaoQinToolsSingleInstance");
+    if (instanceMutex && GetLastError() == ERROR_ALREADY_EXISTS)
+        return 0;
+#endif
+
     QFont f("Microsoft YaHei UI");
     f.setPixelSize(14);
     app.setFont(f);

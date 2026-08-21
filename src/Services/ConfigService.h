@@ -18,6 +18,15 @@ public:
     QString apiKeyFor(const QString &baseUrl) const { return m_apiKeys.value(baseUrl).toString(); }
     void rememberApiKeyFor(const QString &baseUrl, const QString &key) { m_apiKeys.insert(baseUrl, key); save(); }
 
+    // dedicated CUSTOM slot — the user's own endpoint, kept separate from
+    // presets so switching DeepSeek/OpenAI and back never loses it
+    QString customBaseUrl() const { return m_customBaseUrl; }
+    QString customModel() const { return m_customModel; }
+    QString customApiKey() const { return m_customApiKey; }
+    void setCustomBaseUrl(const QString &v) { m_customBaseUrl = v; save(); }
+    void setCustomModel(const QString &v) { m_customModel = v; save(); }
+    void setCustomApiKey(const QString &v) { m_customApiKey = v; save(); }
+
     QString clashPath() const { return m_clashPath; }
     QString v2rayPath() const { return m_v2rayPath; }
 
@@ -75,6 +84,9 @@ private:
     QString m_model = "deepseek-chat";
     QString m_apiKey;
     QJsonObject m_apiKeys;             // baseUrl -> last used key
+    QString m_customBaseUrl;           // user's own endpoint (自定义 slot)
+    QString m_customModel;
+    QString m_customApiKey;
     QString m_clashPath;
     QString m_v2rayPath;
     QString m_userName = "用户";

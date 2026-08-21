@@ -917,6 +917,104 @@ void AiService::setApiModel(const QString &v) { ConfigService::instance().setMod
 void AiService::setApiKey(const QString &v) { ConfigService::instance().setApiKey(v); }
 QString AiService::apiKeyFor(const QString &baseUrl) { return ConfigService::instance().apiKeyFor(baseUrl); }
 void AiService::rememberApiKeyFor(const QString &baseUrl, const QString &key) { ConfigService::instance().rememberApiKeyFor(baseUrl, key); }
+QString AiService::customBaseUrl() { return ConfigService::instance().customBaseUrl(); }
+QString AiService::customModel() { return ConfigService::instance().customModel(); }
+QString AiService::customApiKey() { return ConfigService::instance().customApiKey(); }
+void AiService::setCustomApi(const QString &url, const QString &model, const QString &key)
+{
+    ConfigService::instance().setCustomBaseUrl(url);
+    ConfigService::instance().setCustomModel(model);
+    ConfigService::instance().setCustomApiKey(key);
+}
+
+// GET {base}/models with the user's key; relay/OpenAI-compatible endpoints
+// answer {"data":[{"id":"gpt-4o",...},...]}. Synchronous (settings action).
+// Models are LIVE-PROBED: relays often list models whose upstream channel is
+// dead ("No available channel ..."), so only models that actually answer a
+// tiny probe request are returned — the settings dropdown never offers a trap.
+QStringList AiService::fetchAvailableModels(const QString &baseUrl, const QString &apiKey)
+{
+    QStringList out;
+    QString base = baseUrl.trimmed();
+    QString key = apiKey.trimmed();
+    if (base.isEmpty() || key.isEmpty()) return out;
+
+    QNetworkRequest listReq(QUrl(base + "/models"));
+    listReq.setRawHeader("Authorization", ("Bearer " + key).toUtf8());
+    listReq.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QNetworkAccessManager mgr;
+    QNetworkReply *listReply = mgr.get(listReq);
+    QEventLoop listLoop;
+    QTimer listTimeout;
+    listTimeout.setSingleShot(true);
+    QObject::connect(listReply, &QNetworkReply::finished, &listLoop, &QEventLoop::quit);
+    QObject::connect(&listTimeout, &QTimer::timeout, &listLoop, &QEventLoop::quit);
+    listTimeout.start(4000);
+    listLoop.exec();
+
+    QStringList candidates;
+    if (listReply->error() == QNetworkReply::NoError) {
+        const QJsonDocument doc = QJsonDocument::fromJson(listReply->readAll());
+        const QJsonArray data = doc.object().value("data").toArray();
+        for (const QJsonValue &v : data) {
+            const QString id = v.toObject().value("id").toString();
+            if (!id.isEmpty()) candidates << id;
+        }
+    }
+    listReply->deleteLater();
+
+    // probe each candidate IN PARALLEL with a minimal chat request — the
+    // whole batch finishes in one round-trip, not N×
+    QList<QNetworkReply*> replies;
+    QHash<QNetworkReply*, QString> replyToId;
+    for (const QString &id : candidates) {
+        QJsonObject body;
+        body.insert("model", id);
+        QJsonArray msgs;
+        QJsonObject m;
+        m.insert("role", "user");
+        m.insert("content", "hi");
+        msgs.append(m);
+        body.insert("messages", msgs);
+        body.insert("stream", false);
+
+        QNetworkRequest req(QUrl(base + "/chat/completions"));
+        req.setRawHeader("Authorization", ("Bearer " + key).toUtf8());
+        req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+        QNetworkReply *reply = mgr.post(req, QJsonDocument(body).toJson());
+        replies << reply;
+        replyToId.insert(reply, id);
+    }
+
+    QEventLoop loop;
+    int remaining = replies.size();
+    auto onDone = [&loop, &remaining]() { if (--remaining <= 0) loop.quit(); };
+    QHash<QNetworkReply*, QStringList*> results;
+    for (QNetworkReply *reply : replies) {
+        QStringList *ok = new QStringList;   // collected per reply via lambda
+        results.insert(reply, ok);
+        QObject::connect(reply, &QNetworkReply::finished, &loop, [reply, ok, &out, onDone]() {
+            if (reply->error() == QNetworkReply::NoError) {
+                const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+                if (!doc.object().value("choices").toArray().isEmpty())
+                    *ok << "1";
+            }
+            onDone();
+        });
+    }
+    // global cap so a hung channel can't stall the whole list
+    QTimer::singleShot(4000, &loop, [&loop]() { loop.quit(); });
+    loop.exec();
+
+    for (int i = 0; i < replies.size(); ++i) {
+        if (results.value(replies[i])->size() > 0)
+            out << replyToId.value(replies[i]);
+        delete results.value(replies[i]);
+        replies[i]->deleteLater();
+    }
+    return out;
+}
 
 static QString copyAvatar(const QString &src, const QString &name)
 {
@@ -1972,7 +2070,12 @@ QString AiService::callDeepSeekStatic(const QString &system, const QString &user
     if (pe.error != QJsonParseError::NoError || !resp.isObject())
         return "（请求出错：无法解析回复）";
     const QJsonArray choices = resp.object().value("choices").toArray();
-    if (choices.isEmpty()) return "（没有回复内容）";
+    if (choices.isEmpty()) {
+        // surface the real server-side reason instead of a generic message
+        const QString err = resp.object().value("error").toObject().value("message").toString();
+        if (!err.isEmpty()) return "（服务器返回错误：" + err + "）";
+        return "（没有回复内容）";
+    }
     const QJsonObject first = choices.first().toObject();
     const QJsonObject message = first.value("message").toObject();
     return message.value("content").toString("（空回复）").trimmed();
@@ -2018,7 +2121,12 @@ QString AiService::callDeepSeekMessages(const QJsonArray &messages)
     if (pe.error != QJsonParseError::NoError || !resp.isObject())
         return "（请求出错：无法解析回复）";
     const QJsonArray choices = resp.object().value("choices").toArray();
-    if (choices.isEmpty()) return "（没有回复内容）";
+    if (choices.isEmpty()) {
+        // surface the real server-side reason instead of a generic message
+        const QString err = resp.object().value("error").toObject().value("message").toString();
+        if (!err.isEmpty()) return "（服务器返回错误：" + err + "）";
+        return "（没有回复内容）";
+    }
     const QJsonObject first = choices.first().toObject();
     const QJsonObject message = first.value("message").toObject();
     return message.value("content").toString("（空回复）").trimmed();
