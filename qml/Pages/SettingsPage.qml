@@ -122,7 +122,16 @@ Page {
                     spacing: 10
 
                     Text { text: "AI 配置"; color: Theme.text; font.pixelSize: 15; font.bold: true }
-                    Text { text: "Base URL"; color: Theme.textDim; font.pixelSize: 12 }
+                    
+                    Text {
+                        Layout.fillWidth: true
+                        text: "支持任意 OpenAI 兼容的 API 接入（DeepSeek / Claude / GPT / 自建中转）"
+                        color: Theme.textDim
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
+
+                    Text { text: "Base URL"; color: Theme.textDim; font.pixelSize: 12; Layout.topMargin: 4 }
                     TextField {
                         id: editBaseUrl
                         Layout.fillWidth: true
@@ -155,6 +164,52 @@ Page {
                         text: aiService.apiKey()
                         echoMode: TextInput.Password
                         background: Rectangle { color: Theme.inputBg; radius: 8 }
+                    }
+
+                    // ---- quick preset buttons ----
+                    Text { 
+                        text: "快速预设" 
+                        color: Theme.text 
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.topMargin: 8
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: "一键填入常用 API 配置（需自行填写 Key）"
+                        color: Theme.textDim
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 2
+                        rowSpacing: 8
+                        columnSpacing: 8
+
+                        AppButton {
+                            text: "DeepSeek"
+                            variant: "ghost"
+                            Layout.fillWidth: true
+                            implicitHeight: 32
+                            onClicked: {
+                                editBaseUrl.text = "https://api.deepseek.com/v1"
+                                editModel.text = "deepseek-chat"
+                                appCore.showToast("已填入 DeepSeek 配置")
+                            }
+                        }
+                        AppButton {
+                            text: "OpenAI"
+                            variant: "ghost"
+                            Layout.fillWidth: true
+                            implicitHeight: 32
+                            onClicked: {
+                                editBaseUrl.text = "https://api.openai.com/v1"
+                                editModel.text = "gpt-4o"
+                                appCore.showToast("已填入 OpenAI 配置")
+                            }
+                        }
                     }
 
                     RowLayout {
